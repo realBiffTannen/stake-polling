@@ -1,5 +1,7 @@
 # stake-polling
 
+
+
 Minute-resolution accounting data for **your studio on [Engine](https://studio.engine.io)**, kept
 in Redis, with a web dashboard, a live terminal dashboard and anomaly detection. It works for any
 team you can log in to: point it at your team slug and it polls that team's roster, catalogue,
@@ -17,6 +19,12 @@ per-mode stats and balance.
 > | BTC | `bc1q97n73mmc9g7s2v7ydstg2h564gvr6593v5n5e0` |
 >
 > Thank you.
+
+<img width="1511" height="833" alt="Screenshot 2026-09-22 at 5 38 55 PM" src="https://github.com/user-attachments/assets/460ad7d7-2c8c-4d3b-887b-079c64d1fc41" />
+<img width="1512" height="711" alt="Screenshot 2026-09-22 at 5 39 06 PM" src="https://github.com/user-attachments/assets/449136b2-1867-4f3a-9520-6174c1a9344b" />
+<img width="1499" height="652" alt="Screenshot 2026-09-22 at 5 39 51 PM" src="https://github.com/user-attachments/assets/a73d1a1a-2782-4e58-9f07-726d8128e769" />
+<img width="1482" height="620" alt="Screenshot 2026-09-22 at 5 40 01 PM" src="https://github.com/user-attachments/assets/cf9c0dc0-17c4-4613-91f5-8b6a2f09a771" />
+
 
 Three processes, joined only by Redis:
 
