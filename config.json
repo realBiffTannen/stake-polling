@@ -1,0 +1,51 @@
+{
+  "apiUrl": "https://studio.engine.io/api",
+  "redisUrl": "redis://127.0.0.1:6379",
+  "sidFile": ".sid",
+  "timeoutMs": 15000,
+  "dayBoundaryUtcHour": 0,
+
+  "pollMinutes": 2.5,
+
+  "intervals": {
+    "roster": 1,
+    "games": 1,
+    "gameStats": 1,
+    "balance": 1,
+    "graph": 15,
+    "lifetime": 60,
+    "summary": 5
+  },
+
+  "retention": {
+    "trailDays": 30,
+    "alertMaxLen": 5000,
+    "summaryMaxLen": 2016
+  },
+
+  "money": {
+    "unitsPerDollar": 1000000,
+    "profitShare": 0.1,
+    "expectedShare": 0.075
+  },
+
+  "detect": {
+    "windowSamples": 36,
+    "warmupSamples": 12,
+    "flatLineMinutes": 15,
+    "zWarn": 4,
+    "zCrit": 6,
+    "ratePerMinuteFloors": {
+      "turnover": 50,
+      "profit": 25,
+      "count": 25
+    },
+    "levelFloors": {
+      "onlinePlayers": 25,
+      "gameOnlinePlayers": 5
+    },
+    "shareShiftPoints": 15,
+    "shareShiftMinShare": 0.05,
+    "cooldownMinutes": 15
+  }
+}

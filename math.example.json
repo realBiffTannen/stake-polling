@@ -1,0 +1,25 @@
+{
+  "your-game-slug": {
+    "version": 1,
+    "edge": 0.035,
+    "maxWin": 10000,
+    "released": true,
+    "volatilityClass": "HIGH",
+    "baseVolatility": 20.0,
+    "costLadder": [1, 100],
+    "tail": { "5000": 0.0005, "10000": 0.0002 },
+    "compliance": { "passes2Star": true, "passes3Star": true, "failures": [] },
+    "modes": {
+      "BASE": {
+        "cost": 1, "rtp": 0.965, "sigma": 20.0, "zeroRate": 0.75, "hitRate": 0.25, "breakEvenRate": 0.15,
+        "mean": 0.965, "minWin": 0, "maxWin": 10000, "subBetRate": 0.1, "avgSpinsBetweenWin": 4,
+        "worstLossStreak": 50, "worstZeroStreak": 25, "volatilityClass": "HIGH"
+      },
+      "BONUS": {
+        "cost": 100, "rtp": 0.965, "sigma": 2.0, "zeroRate": 0, "hitRate": 1, "breakEvenRate": 0.3,
+        "mean": 96.5, "minWin": 10, "maxWin": 10000, "subBetRate": 0.7, "avgSpinsBetweenWin": 1,
+        "worstLossStreak": 20, "worstZeroStreak": 0, "volatilityClass": "LOW"
+      }
+    }
+  }
+}

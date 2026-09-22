@@ -1,0 +1,82 @@
+{
+  "berry": [
+    "ANTE",
+    "BASE",
+    "BONUS",
+    "SUPERBONUS"
+  ],
+  "dino-dash-extreme": [
+    "ANTE",
+    "BASE",
+    "BONUS",
+    "EXTREMESPINS",
+    "MYSTERYDOOR"
+  ],
+  "lunar-blossom": [
+    "ANTE0",
+    "BASE",
+    "BLOSSOMS0",
+    "BONUS0",
+    "MYSTERY0",
+    "WHEEL0"
+  ],
+  "neon-city-heist": [
+    "ABYSS_DIVE_RUN",
+    "ANTE",
+    "BACKLOT_STUNT",
+    "BASE",
+    "DOUBLE_DYNAMITE",
+    "PROMO_PASS"
+  ],
+  "pixel-balloons": [
+    "BASE",
+    "BONUS"
+  ],
+  "pixel-bulldogs": [
+    "BASE",
+    "BONUS0"
+  ],
+  "pixel-carnivals": [
+    "BASE",
+    "BONUS_BOOST",
+    "EXTRA_WILDS",
+    "FREE_SPINS",
+    "NEITHER_OR_NONE",
+    "PRIZE_PICKER"
+  ],
+  "pixel-embers": [
+    "ANTE",
+    "BASE",
+    "BONUS",
+    "SUPERBONUS",
+    "TAKEOVER"
+  ],
+  "pixel-fort": [
+    "BASE",
+    "BONUS0",
+    "BONUS1",
+    "BONUS2",
+    "BONUS3",
+    "BONUS4",
+    "BONUS5",
+    "BONUS6",
+    "BONUS7"
+  ],
+  "pixel-geyser": [
+    "BASE",
+    "BONUS0",
+    "BONUS1",
+    "BONUS2",
+    "BONUS3",
+    "BONUS4",
+    "BONUS5",
+    "BONUS6"
+  ],
+  "pixel-nest": [
+    "BASE",
+    "BONUS0",
+    "BONUS1",
+    "BONUS2",
+    "BONUS3"
+  ]
+}

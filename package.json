@@ -1,0 +1,35 @@
+{
+  "name": "stake-polling",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minute-resolution Engine accounting poller into Redis, with a live terminal dashboard and anomaly detection.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/realBiffTannen/stake-polling.git"
+  },
+  "homepage": "https://github.com/realBiffTannen/stake-polling#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "stake-poller": "./bin/stake-poller.mjs",
+    "stake-dash": "./bin/stake-dash.mjs",
+    "stake-web": "./bin/stake-web.mjs"
+  },
+  "scripts": {
+    "start": "node bin/stake-up.mjs",
+    "poll": "node bin/stake-poller.mjs",
+    "dash": "node bin/stake-dash.mjs",
+    "web": "node bin/stake-web.mjs",
+    "service:install": "node scripts/service.mjs install",
+    "service:uninstall": "node scripts/service.mjs uninstall",
+    "service:status": "node scripts/service.mjs status",
+    "enable-persistence": "node scripts/enable-persistence.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "redis": "^5.0.0"
+  }
+}

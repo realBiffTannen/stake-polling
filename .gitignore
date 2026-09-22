@@ -1,0 +1,12 @@
+node_modules/
+.sid
+*.log
+.DS_Store
+
+# SDD scratch workspace
+.superpowers/
+
+# This install's own studio: team, start date, service label, and its math sheet.
+/config.local.json
+/math.json
+.claude/settings.local.json
