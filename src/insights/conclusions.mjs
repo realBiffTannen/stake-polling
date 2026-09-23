@@ -17,7 +17,7 @@
  *     far more often than right.
  */
 
-import { formatUsdSigned, toShareUsd } from '../money.mjs';
+import { formatUsd, formatUsdSigned, toUsd, toShareUsd, DEFAULT_MONEY } from '../money.mjs';
 import { marginOf } from '../math/checks.mjs';
 import { bucketSeries, bucketStart } from '../buckets.mjs';
 
@@ -32,6 +32,14 @@ const ints = (v) => Math.round(v).toLocaleString('en-US');
 const plural = (n, word) => `${n} ${n === 1 ? word : `${word}s`}`;
 const hourLabel = (ts) => `${new Date(ts).toISOString().slice(11, 13)}:00Z`;
 const dayLabel = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/**
+ * Whether a per-mode row is a feature buy. The one definition every buy
+ * figure uses, so a mode cannot be a buy in one chart and base play in the one
+ * beside it. A mode whose cost was never read is not called a buy: an ANTE at
+ * 1.25x and a BONUS at 200x are told apart only by that number.
+ */
+export const isFeatureBuy = (row) => measured(row?.cost) && Number(row.cost) > BUY_COST;
 
 /**
  * Studio profit/loss per game, winners first.
@@ -84,7 +92,7 @@ export function buyShare(modeRowsBySlug = {}, labels = {}) {
     const played = (Array.isArray(rows) ? rows : []).filter((r) => measured(r.turnover));
     const total = sumOf(played.map((r) => Number(r.turnover)));
     if (!played.length || total <= 0) continue;
-    const bought = sumOf(played.filter((r) => measured(r.cost) && Number(r.cost) > BUY_COST).map((r) => Number(r.turnover)));
+    const bought = sumOf(played.filter(isFeatureBuy).map((r) => Number(r.turnover)));
     buys += bought; all += total;
     bars.push({ key: slug, label: labels[slug] ?? slug, value: bought / total * 100 });
   }
@@ -160,17 +168,26 @@ export function bandHeadline(rows = [], noun = 'games') {
  *   hour is the one holding `from` when given, else `hours` back from now's
  */
 export function hourlySeries(trails = [], field, { now, hours = 24, from = null, maxGapMs = 20 * 60_000 }) {
-  const last = bucketStart(now, HOUR_MS);
-  const first = from !== null && from !== undefined ? bucketStart(from, HOUR_MS) : last - (hours - 1) * HOUR_MS;
+  return summedSeries(trails, field, { now, sizeMs: HOUR_MS, count: hours, from, maxGapMs });
+}
+
+/**
+ * The same, in buckets of any size: `count` buckets back to the one `now`
+ * falls in, or from the one holding `from`. The live strip reads it one poll
+ * interval at a time.
+ */
+export function summedSeries(trails = [], field, { now, sizeMs, count = 24, from = null, maxGapMs = 20 * 60_000 }) {
+  const last = bucketStart(now, sizeMs);
+  const first = from !== null && from !== undefined ? bucketStart(from, sizeMs) : last - (count - 1) * sizeMs;
   // A trail is split wherever the collector went quiet for longer than
   // `maxGapMs`: the first sample after an outage carries the whole outage's
   // volume in one step, and pinning that on the hour it arrived in once put
   // 23,000 bets into a single hour. Each segment's first sample is only a
   // baseline, so the outage step is dropped and the hours it spans stay null.
   const per = trails.filter(Array.isArray).flatMap((t) => splitAtGaps(t, maxGapMs)).map((t) => new Map(
-    bucketSeries(t, field, { sizeMs: HOUR_MS, from: first, to: now }).map((b) => [b.from, b.value])));
+    bucketSeries(t, field, { sizeMs, from: first, to: now }).map((b) => [b.from, b.value])));
   const out = [];
-  for (let start = first; start <= last; start += HOUR_MS) {
+  for (let start = first; start <= last; start += sizeMs) {
     const values = per.map((m) => m.get(start)).filter((v) => v !== null && v !== undefined);
     out.push({ from: start, value: values.length ? sumOf(values) : null });
   }
@@ -276,7 +293,7 @@ export function modeMix(modeRows = []) {
   if (bets <= 0 && turn <= 0) return { rows: [], headline: null };
   const share = (v, total) => (measured(v) && total > 0 ? Number(v) / total * 100 : null);
   const rows = list.map((r) => ({ key: r.mode, label: r.mode, bets: share(r.count, bets), turnover: share(r.turnover, turn), cost: r.cost }));
-  const buys = rows.filter((r) => measured(r.cost) && Number(r.cost) > BUY_COST);
+  const buys = rows.filter(isFeatureBuy);
   let headline;
   if (buys.length) {
     headline = `Feature buys are ${sumOf(buys.map((r) => r.bets ?? 0)).toFixed(1)}% of bets but ${sumOf(buys.map((r) => r.turnover ?? 0)).toFixed(1)}% of turnover.`;
@@ -370,4 +387,69 @@ export function modeBands(modeRows = [], math = null) {
     const band = noiseBand({ profit: r.profit, turnover: r.turnover, edge, parts: [{ count: r.count, turnover: r.turnover, sigma: captured?.sigma ?? null }] });
     return { key: r.mode, label: r.mode, value: band.margin, lo: band.lo, hi: band.hi, ref: band.edge, z: band.z, outside: band.outside };
   });
+}
+
+/** Per-mode turnover in dollars, the modes nobody measured or nobody played left out. */
+function playedModes(rows, money) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((r) => ({ mode: String(r?.mode ?? '?'), value: toUsd(r?.turnover, money), buy: isFeatureBuy(r) }))
+    .filter((m) => m.value !== null && m.value > 0);
+}
+
+/**
+ * Turnover by game, then by bet mode, for a treemap: every game that took
+ * turnover in the span, biggest first, each with its modes biggest first.
+ *
+ * A treemap can only draw a positive area, so a mode with no reading or a
+ * zero is left out rather than drawn as a sliver - and a game none of whose
+ * modes measured anything is absent, not a zero-sized tile. With nothing
+ * measured at all, `total` is null and so is the headline.
+ *
+ * @param {Record<string, object[]>} modeRowsBySlug per-mode rows, raw units
+ * @param {Record<string, string>} labels slug -> display name
+ */
+export function turnoverTree(modeRowsBySlug = {}, labels = {}, money = DEFAULT_MONEY, { span = 'this month' } = {}) {
+  const games = Object.entries(modeRowsBySlug ?? {}).map(([slug, rows]) => {
+    const modes = playedModes(rows, money).sort((a, b) => b.value - a.value || a.mode.localeCompare(b.mode));
+    return { key: slug, label: labels?.[slug] ?? slug, value: sumOf(modes.map((m) => m.value)), modes };
+  }).filter((g) => g.modes.length)
+    .sort((a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key)));
+  if (!games.length) return { games, total: null, headline: null };
+  const total = sumOf(games.map((g) => g.value));
+  const share = (v, of) => `${Math.round(v / of * 100)}%`;
+  const [top] = games;
+  let headline = `${top.label} takes ${share(top.value, total)} of turnover ${span}`;
+  headline += top.modes.length > 1 ? `, and ${top.modes[0].mode} is ${share(top.modes[0].value, top.value)} of that.` : `, all of it in ${top.modes[0].mode}.`;
+  // The biggest tile is not always inside the biggest game: one heavily
+  // bought feature can outweigh a bigger game spread across many modes.
+  const slice = games.flatMap((g) => g.modes.map((m) => ({ game: g, ...m }))).reduce((a, b) => (b.value > a.value ? b : a));
+  if (slice.game !== top) headline += ` The single biggest slice is ${slice.game.label} ${slice.mode}, at ${share(slice.value, total)}.`;
+  return { games, total, headline };
+}
+
+/**
+ * Where the turnover flows: studio, then each game, then base play or
+ * feature buys (isFeatureBuy - the same split as buyShare and buyEconomics).
+ * Money in dollars; a game none of whose modes measured turnover is left out,
+ * and so is the side of the split a game never touched.
+ */
+export function turnoverFlow(modeRowsBySlug = {}, labels = {}, money = DEFAULT_MONEY, { span = 'this month' } = {}) {
+  const games = Object.entries(modeRowsBySlug ?? {}).map(([slug, rows]) => {
+    const modes = playedModes(rows, money);
+    const buys = sumOf(modes.filter((m) => m.buy).map((m) => m.value));
+    const base = sumOf(modes.filter((m) => !m.buy).map((m) => m.value));
+    return { key: slug, label: labels?.[slug] ?? slug, base, buys, total: base + buys, played: modes.length };
+  }).filter((g) => g.played && g.total > 0)
+    .sort((a, b) => b.total - a.total || String(a.key).localeCompare(String(b.key)))
+    .map(({ played, ...g }) => g);
+  if (!games.length) return { games, base: null, buys: null, total: null, headline: null };
+  const base = sumOf(games.map((g) => g.base)), buys = sumOf(games.map((g) => g.buys)), total = base + buys;
+  if (buys === 0) return { games, base, buys, total, headline: `${formatUsd(total)} of turnover ${span}, all of it base play: no mode played was a feature buy.` };
+  const pct = (v) => `${Math.round(v / total * 100)}%`;
+  let headline = `${formatUsd(total)} of turnover ${span}: ${formatUsd(base)} (${pct(base)}) base play, ${formatUsd(buys)} (${pct(buys)}) feature buys.`;
+  const lead = games.reduce((a, b) => (b.buys > a.buys ? b : a));
+  headline += games.filter((g) => g.buys > 0).length > 1
+    ? ` ${lead.label} sends the most into buys: ${formatUsd(lead.buys)}, ${Math.round(lead.buys / buys * 100)}% of all of them.`
+    : ` Every buy was in ${lead.label}.`;
+  return { games, base, buys, total, headline };
 }
