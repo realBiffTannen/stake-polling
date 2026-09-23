@@ -57,6 +57,8 @@ test('snapshots come back as envelopes with a fetch timestamp', { skip }, async 
   assert.equal(dash.roster.data.balance, 84120);
   assert.equal(dash.perGame['pixel-geyser'].data.modes.length, 0);
   assert.equal(dash.meta.auth_state, 'ok');
+  assert.ok(dash.redisMemory.usedBytes > 0, 'INFO memory read off the real server');
+  assert.match(dash.redisMemory.human, /^\d+(\.\d+)?[BKMGT]$/);
 });
 
 test('a failed endpoint leaves the previous snapshot in place', { skip }, async () => {

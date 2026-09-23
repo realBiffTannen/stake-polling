@@ -6,11 +6,11 @@
  * here, so they cannot drift from the picture.
  *
  * The picker scopes everything that CAN be scoped: this month (the API's own
- * month-to-date), today (the trail since 00:00:00Z) or the last 24 hours (the
- * trail, rolling). Two panels are fixed by what they are: the hour-by-hour
- * charts need the trail, so under "this month" they show the last 24 hours;
- * and the daily P/L chart is always the month, because a day does not split
- * into days.
+ * month-to-date), today (the trail since 00:00:00Z) or a rolling window of
+ * 1, 3, 6 or 24 hours or 3 days (the trail). Two panels are fixed by what
+ * they are: the hour-by-hour charts need the trail, so under "this month"
+ * they show the last 24 hours; and the daily P/L chart is always the month,
+ * because a day does not split into days.
  */
 
 import { html } from '../html.mjs';
@@ -54,19 +54,23 @@ function coverageGap(trails, from) {
 }
 
 /**
- * @param {{ state: object, model: object, span: 'month'|'today'|'24h' }} args
+ * @param {{ state: object, model: object, span: keyof SPANS }} args
  */
 export function renderAnalysis({ state, model, span = 'month' }) {
   const now = Number(state.now) || Date.now();
   const money = state.money;
   const from = spanStart(span, now);
-  const words = SPANS[span].words;
+  const { words, hours } = SPANS[span];
+  // A span longer than the shared 24-hour trail arrives with its own, read by
+  // time (bin/stake-web.mjs); every other span reads the shared one.
+  const spanGames = state.spanTrails?.games ?? state.gameTrails ?? {};
+  const spanModes = state.spanTrails?.modes ?? state.modeTrails ?? {};
   const baseRows = state.rows ?? [];
-  const rows = from === null ? baseRows : gameRowsOver(baseRows, state.gameTrails ?? {}, from, money);
+  const rows = from === null ? baseRows : gameRowsOver(baseRows, spanGames, from, money);
   const labels = Object.fromEntries(baseRows.map((r) => [r.name, r.label ?? r.name]));
   const modesBySlug = from === null
     ? (state.modeRows ?? {})
-    : Object.fromEntries(Object.entries(state.modeTrails ?? {}).map(([slug, trail]) => [slug, modeRowsOver(trail, from, state.modeRows?.[slug])]));
+    : Object.fromEntries(Object.entries(spanModes).map(([slug, trail]) => [slug, modeRowsOver(trail, from, state.modeRows?.[slug])]));
 
   const sets = donutSets(rows, { span: words });
   const colourOf = (s) => (s.slot === null ? OTHER_COLOUR : GAME_COLOURS[s.slot]);
@@ -77,14 +81,18 @@ export function renderAnalysis({ state, model, span = 'month' }) {
   const share = turnoverShare(rows, { span: words });
   const buys = buyShare(modesBySlug, labels);
 
-  // The hour-by-hour panels: since midnight for "today", else the last 24h.
-  const hourSpan = span === 'today' ? { now, from } : { now, hours: 24 };
-  const hourWords = span === 'today' ? 'Today' : 'Last 24h';
-  const trails = Object.values(state.gameTrails ?? {});
+  // The hour-by-hour panels: since midnight for "today"; for a window shorter
+  // than a day, every clock hour it reaches into, so the chart starts at the
+  // top of the hour the window begins in and says so; else the last N hours
+  // (the last 24 under "this month").
+  const partHours = hours && hours < 24;
+  const hourSpan = span === 'today' || partHours ? { now, from } : { now, hours: hours ?? 24 };
+  const hourWords = span === 'today' ? 'Today' : partHours ? `Since ${hh(from)}:00Z` : hours ? SPANS[span].label : 'Last 24h';
+  const trails = Object.values(spanGames);
   const profitHours = hourlySeries(trails, 'profit', hourSpan);
   const trend = pnlTrend(profitHours, money, { span: hourWords });
   const betHours = hourlySeries(trails, 'count', hourSpan);
-  const online = onlineHourly(state.onlineTrail ?? [], hourSpan);
+  const online = onlineHourly(state.spanTrails?.online ?? state.onlineTrail ?? [], hourSpan);
   const hourLabels = profitHours.map((s) => hh(s.from));
   const hourTips = profitHours.map((s) => `${hh(s.from)}:00Z`);
   const daily = model?.daily ?? [];
@@ -102,12 +110,12 @@ export function renderAnalysis({ state, model, span = 'month' }) {
   const signedOrDash = (v) => (blank(v) ? DASH : formatUsdSigned(v));
   const pctOrDash = (v, dp = 1) => (blank(v) ? DASH : pct(Number(v) * 100, dp));
 
-  const gap = from === null ? null : coverageGap(state.gameTrails, from);
+  const gap = from === null ? null : coverageGap(spanGames, from);
   const scope = span === 'month'
     ? 'Month-to-date from the 1st at 00:00Z, as the API reports it.'
     : span === 'today'
       ? `Since 00:00:00Z today - ${utcHm(now)} now, so ${Math.floor((now - from) / 3_600_000)}h ${Math.floor(((now - from) % 3_600_000) / 60000)}m of play.`
-      : `The rolling 24 hours to ${utcHm(now)}, from the collector's own trail.`;
+      : `The rolling ${SPANS[span].period} to ${utcHm(now)}, from the collector's own trail.`;
 
   const body = html`<div class="page-heading"><div><div class="eyebrow">WHAT THE DATA SAYS</div><h1>Analysis<span>.</span></h1>
       <p>Every chart states its conclusion, and every conclusion carries what it was computed from.</p></div></div>
@@ -163,7 +171,8 @@ export function renderAnalysis({ state, model, span = 'month' }) {
 
   ${panel('Running studio P/L, hour by hour', trend.headline, lineChart({ labels: hourLabels, tipLabels: hourTips,
       series: [{ name: 'running studio P/L', colour: '#4a8ff5', values: trend.cumulative }], format: formatUsdSigned, title: `${hourWords}: running studio P/L` }),
-    span === 'month' ? 'Hourly figures come from the collector\'s trail, which holds the last 24 hours.' : null)}
+    span === 'month' ? 'Hourly figures come from the collector\'s trail, so under This month they show the last 24 hours.'
+      : partHours ? `Whole clock hours: the chart starts at ${hh(from)}:00Z, the top of the hour the window begins in.` : null)}
 
   ${panel('Studio P/L per hour', trend.hourHeadline, columns({ rows: profitHours.map((s, i) => ({ label: hourLabels[i], tipLabel: hourTips[i], value: trend.hourly[i] })),
     tone: 'sign', format: formatUsdSigned, title: 'Studio P/L per hour' }))}
@@ -179,7 +188,7 @@ export function renderAnalysis({ state, model, span = 'month' }) {
 
   <section class="panel definitions"><div class="section-heading"><h2>How to read these</h2></div>
     <div class="definition-grid">
-      <div><h3>The picker</h3><p>This month is what the API reports month-to-date. Today is the change since 00:00:00Z, so at 01:00Z it holds one hour. Last 24h is the rolling 24 hours. Today and Last 24h are read from the collector's trail, which samples every ${Number(state.pollMinutes) > 0 ? `${Number(state.pollMinutes)} minutes` : 'poll'} on the clock, starting at 00:00Z.</p></div>
+      <div><h3>The picker</h3><p>This month is what the API reports month-to-date. Today is the change since 00:00:00Z, so at 01:00Z it holds one hour. Last 1h, 3h, 6h, 24h and 3 days are rolling windows ending now. Everything but This month is read from the collector's trail, which samples every ${Number(state.pollMinutes) > 0 ? `${Number(state.pollMinutes)} minutes` : 'poll'} on the clock, starting at 00:00Z.</p></div>
       <div><h3>Money</h3><p>Studio P/L is ${Math.round((money?.profitShare ?? 0.1) * 100)}% of gross gaming revenue. Margins and RTP use the gross figures. A game with no reading shows a dash and is left out of every total.</p></div>
       <div><h3>Noise</h3><p>A month of play can sit tens of points from a game's edge by variance alone. Only a margin outside its ±2 standard-error band is called out, and even then it is a prompt to look, not proof of a fault.</p></div>
     </div></section>`;

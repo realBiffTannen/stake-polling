@@ -17,7 +17,7 @@ import { lineChart } from '../charts/line.mjs';
 import { MODE_COLOURS } from '../svg.mjs';
 import { totalsOf } from '../../tui/state.mjs';
 import { spanPicker, chartPanel } from './parts.mjs';
-import { SPANS, spanStart, modeRowsOver } from '../../insights/span.mjs';
+import { SPANS, GAME_SPANS, spanStart, modeRowsOver } from '../../insights/span.mjs';
 import { pnlByMode, modeMix, modeBands, bandHeadline, hourlySeries, pnlTrend, betsTrend } from '../../insights/conclusions.mjs';
 import { hbars, pairedBars, bandChart } from '../charts/hbars.mjs';
 import { columns } from '../charts/columns.mjs';
@@ -125,7 +125,7 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
         : span === 'month' ? 'Month-to-date per mode, from the game endpoint. One bet is one game played. Player identity is not reported per mode.'
           : `Per mode ${SPANS[span].words === 'today' ? 'since 00:00:00Z today' : 'over the last 24 hours'}, from the collector's own trail. One bet is one game played; average bet and the effective/normalized RTPs are only reported for the month.`}</p></div>
       <span class="tag">${rows.length} modes</span></div>
-    ${notLive ? null : html`<div class="scope-line"><span>${spanPicker(`/game/${encodeURIComponent(slug)}`, span)}</span></div>`}
+    ${notLive ? null : html`<div class="scope-line"><span>${spanPicker(`/game/${encodeURIComponent(slug)}`, span, GAME_SPANS)}</span></div>`}
     ${modeTable({ slug, rows, math, state })}</section>`;
 
   if (notLive) {

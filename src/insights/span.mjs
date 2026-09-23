@@ -1,12 +1,12 @@
 /**
- * The time picker: this month, today, or the last 24 hours.
+ * The time picker: this month, today, or a rolling window ending now.
  *
  *   month   what the API reports - month-to-date from the 1st at 00:00Z. The
  *           per-game and per-mode responses carry nothing finer.
  *   today   the change since 00:00:00Z, read off the collector's own trail.
  *           At 01:00Z that is one hour of play, because one hour of the UTC
  *           day has elapsed - not a rolling window.
- *   24h     the change over the trailing 24 hours, from the same trail.
+ *   1h..3d  the change over the trailing `hours`, from the same trail.
  *
  * Today is pinned to midnight UTC on purpose, independent of the configured
  * accounting-day hour: "today" on this picker means the UTC calendar day.
@@ -23,11 +23,21 @@ import { toUsd, toShareUsd } from '../money.mjs';
 export const SPANS = {
   month: { label: 'This month', words: 'this month' },
   today: { label: 'Today', words: 'today' },
-  '24h': { label: 'Last 24h', words: 'in the last 24h' },
+  '1h': { label: 'Last 1h', words: 'in the last hour', hours: 1, period: 'hour' },
+  '3h': { label: 'Last 3h', words: 'in the last 3h', hours: 3, period: '3 hours' },
+  '6h': { label: 'Last 6h', words: 'in the last 6h', hours: 6, period: '6 hours' },
+  '24h': { label: 'Last 24h', words: 'in the last 24h', hours: 24, period: '24 hours' },
+  '3d': { label: 'Last 3 days', words: 'in the last 3 days', hours: 72, period: '3 days' },
 };
 
-export function spanOf(param) {
-  return Object.hasOwn(SPANS, param ?? '') ? param : 'month';
+/**
+ * The spans a game page offers. Its per-mode trail is read 24 hours deep, so
+ * a longer window would silently cover less than its label says.
+ */
+export const GAME_SPANS = ['month', 'today', '24h'];
+
+export function spanOf(param, allowed = Object.keys(SPANS)) {
+  return allowed.includes(param ?? '') ? param : 'month';
 }
 
 /** Where a trail span begins, or null for the month (which the API reports whole). */
@@ -36,8 +46,8 @@ export function spanStart(span, now) {
     const d = new Date(now);
     return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   }
-  if (span === '24h') return now - 86_400_000;
-  return null;
+  const hours = SPANS[span]?.hours;
+  return hours ? now - hours * 3_600_000 : null;
 }
 
 /**

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { loadConfig } from '../src/config.mjs';
-import { connect } from '../src/store/redis.mjs';
+import { connect, redactUrl } from '../src/store/redis.mjs';
 import { keys } from '../src/store/keys.mjs';
 import { DashboardApp } from '../src/tui/app.mjs';
 import { VIEWS } from '../src/tui/views/plain.mjs';
@@ -12,7 +12,7 @@ let client;
 try {
   client = await connect(config.redisUrl);
 } catch (err) {
-  console.error(`cannot reach redis at ${config.redisUrl}: ${err?.message ?? err}`);
+  console.error(`cannot reach redis at ${redactUrl(config.redisUrl)}: ${err?.message ?? err}`);
   console.error('start it with `redis-server` (or `brew services start redis`) and try again.');
   process.exit(1);
 }

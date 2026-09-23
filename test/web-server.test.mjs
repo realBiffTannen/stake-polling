@@ -403,6 +403,18 @@ test('/analysis renders and asks read() for every game\'s mode trail - the tape 
   assert.equal(hints.at(-1).modesFor, null, 'pages without a tape read no mode trails');
 });
 
+test('/analysis asks read() for a deeper trail only when the span outruns the shared 24 hours', async t => {
+  const { base, hints } = await setupHinted(t);
+  assert.equal((await fetch(base + '/analysis?span=3d')).status, 200);
+  assert.equal(hints.at(-1).trailHours, 72);
+  for (const span of ['month', 'today', '1h', '3h', '6h', '24h']) {
+    await fetch(base + `/analysis?span=${span}`);
+    assert.equal(hints.at(-1).trailHours, null, span);
+  }
+  await fetch(base + '/game/berry?span=3d');
+  assert.equal(hints.at(-1).trailHours, null, 'a game page never reads past 24 hours');
+});
+
 test('a game page asks for that game\'s mode trail only', async t => {
   const { base, hints } = await setupHinted(t);
   assert.equal((await fetch(base + '/game/berry?span=24h')).status, 200);

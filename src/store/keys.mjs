@@ -19,6 +19,9 @@ export function keys(team) {
     modeRollup: `${ns}:insights:modes:v1`,
     catalogue: `${ns}:insights:catalogue:v1`,
     lockInsights: `${ns}:lock:daily-insights`,
+    lockArchive: `${ns}:lock:archive`,
+    // The nightly archive's last run, for the archive page (src/archive).
+    archiveStatus: `${ns}:archive:status`,
     roster: `${ns}:roster:latest`,
     games: `${ns}:games:latest`,
     graph: `${ns}:graph:latest`,

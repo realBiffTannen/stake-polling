@@ -126,6 +126,8 @@ test('a live game page carries the this month / today / last 24h picker', () => 
   assert.match(out, /href="\/game\/pixel-geyser\?span=month"/);
   assert.match(out, /href="\/game\/pixel-geyser\?span=today" class="selected"/);
   assert.match(out, /href="\/game\/pixel-geyser\?span=24h"/);
+  // Its mode trail is read 24 hours deep, so the analysis page's other windows are not offered.
+  assert.doesNotMatch(out, /span=(1h|3h|6h|3d)/);
 });
 
 test('today re-scopes the mode table to the trail since 00:00:00Z', () => {

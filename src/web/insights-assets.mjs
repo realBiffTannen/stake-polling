@@ -66,6 +66,9 @@ export const INSIGHTS_CSS = `
 .chart .band{fill:#26324a}.chart .band-ref{stroke:#8d9bb0;stroke-width:2}
 .chart .dot-in{fill:var(--mint)}.chart .dot-out{fill:var(--warn)}.chart .dot-na{fill:#6b778a}
 .panel .scope-line{margin:0 0 14px}
+.span-picker{flex-wrap:wrap;height:auto;min-height:39px}
+.banner.sticky{position:sticky;top:0;z-index:30;font-weight:600}
+.local-path{display:block;margin-top:4px;font-size:10px;color:var(--dim);white-space:normal;overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}.presigned{margin-top:6px;text-align:left}.presigned summary{cursor:pointer;color:var(--dim);font-size:11px}.presigned code{display:block;max-width:420px;white-space:normal;overflow-wrap:anywhere;font-size:10px;color:#bdc9d8;user-select:all;-webkit-user-select:all}
 table.log td.fields{white-space:normal;text-align:left}table.log td{vertical-align:top}table.log th:nth-child(3){text-align:left}
 table.log .kv{display:inline-block;margin:0 12px 2px 0}table.log .kv b{color:var(--dim);font-weight:500;margin-right:5px}
 nav.pager{flex-direction:row;flex-wrap:wrap;gap:18px;margin:14px 0;font-size:12px}nav.pager a{padding:0;font-size:12px;font-weight:500;color:var(--link);background:none}nav.pager a:hover{background:none;text-decoration:underline}nav.pager .disabled{color:#56637a}

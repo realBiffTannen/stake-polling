@@ -1,6 +1,7 @@
 /** Read side. Used by the dashboard, and by the poller to rebuild its baselines. */
 
 import { gameIds, liveGameIds, mergeSlugs } from '../games.mjs';
+import { readRedisMemory } from './memory.mjs';
 
 const NUMERIC_ALERT_FIELDS = ['ts', 'value', 'baseline', 'z'];
 
@@ -9,7 +10,7 @@ const NUMERIC_ALERT_FIELDS = ['ts', 'value', 'baseline', 'z'];
  * @param {number} alertLimit how many recent alerts to return, newest first
  */
 export async function readDashboard(client, k, alertLimit = 50) {
-  const [meta, roster, games, graph, lifetime, balance, alerts, summaries] = await Promise.all([
+  const [meta, roster, games, graph, lifetime, balance, alerts, summaries, redisMemory] = await Promise.all([
     client.hGetAll(k.meta),
     readSnapshot(client, k.roster),
     readSnapshot(client, k.games),
@@ -18,6 +19,7 @@ export async function readDashboard(client, k, alertLimit = 50) {
     readSnapshot(client, k.balance),
     readAlerts(client, k, alertLimit),
     readSummaries(client, k, 12),
+    readRedisMemory(client),
   ]);
 
   const names = gameNames(roster, games);
@@ -29,7 +31,7 @@ export async function readDashboard(client, k, alertLimit = 50) {
     }),
   );
 
-  return { meta: meta ?? {}, roster, games, graph, lifetime, balance, perGame, alerts, summaries, gameNames: names };
+  return { meta: meta ?? {}, roster, games, graph, lifetime, balance, perGame, alerts, summaries, gameNames: names, redisMemory };
 }
 
 /**

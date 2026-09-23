@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { pipeline } from 'node:stream/promises';
 import { gzipSync } from 'node:zlib';
 import { html } from './html.mjs';
 import { renderInsights, insightsCsv } from './views/insights.mjs';
@@ -14,7 +15,7 @@ import { renderLog } from './views/log.mjs';
 import { renderSettlement } from './views/settlement.mjs';
 import { settlement, dataHealth } from '../insights/settlement.mjs';
 import { listOf } from '../games.mjs';
-import { spanOf } from '../insights/span.mjs';
+import { spanOf, SPANS, GAME_SPANS } from '../insights/span.mjs';
 import { dayBounds } from '../store/export.mjs';
 import { renderGamePage } from './views/game.mjs';
 import { renderModePage } from './views/mode.mjs';
@@ -22,6 +23,7 @@ import { renderBucketsPage } from './views/buckets.mjs';
 import { renderTrends } from './views/trends.mjs';
 import { renderMath } from './views/math.mjs';
 import { renderDonate } from './views/donate.mjs';
+import { renderArchive } from './views/archive.mjs';
 import { gameModel } from '../math/checks.mjs';
 
 const HEADERS = {
@@ -81,6 +83,16 @@ function historyFor(url) {
   return modesFor(url) === 'all' ? null : modesFor(url);
 }
 
+/**
+ * How many hours of trail `read()` must fetch by time, apart from the shared
+ * 24-hour trail: only an analysis span longer than that asks for more.
+ */
+function trailHoursFor(url) {
+  if (url.pathname !== '/analysis') return null;
+  const hours = SPANS[spanOf(url.searchParams.get('span'))].hours ?? 0;
+  return hours > 24 ? hours : null;
+}
+
 // Player insights lived at the root until the overview took it. A bookmark or
 // an open tab carrying its filters still lands on it, filters intact.
 const INSIGHTS_PARAMS = ['game', 'from', 'to', 'days', 'sort', 'dir'];
@@ -102,7 +114,7 @@ const COMPRESSIBLE = /^(text\/|application\/json|image\/svg\+xml)/;
  * poll - are fills, recomputed on every serve (see fills.mjs). `warm(paths)`
  * renders pages into the cache ahead of the first visitor after a tick.
  */
-export function createWebServer({ read, log = null, exporter = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
+export function createWebServer({ read, log = null, exporter = null, archive = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
   const pages = createPageCache({ max: 200, ttlMs: pageTtlMs, now });
 
   // Everything behind the static files: one rendered response, never touched
@@ -111,11 +123,12 @@ export function createWebServer({ read, log = null, exporter = null, version = (
     const page = (body, title, state) => ({ status: 200, type: 'text/html; charset=utf-8',
       body: String(url.searchParams.get('fragment') === '1' ? body : documentFor({ body, title, team: state?.meta?.team ?? null })), state });
     const text = (status, message, extra = {}) => ({ status, type: 'text/plain', body: message, headers: extra });
-    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/export.csv', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
+    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/archive', '/export.csv', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
     if (url.pathname === '/log' && !log) return text(404, 'Page not found');
+    if (url.pathname === '/archive' && !archive) return text(404, 'Page not found');
     if (url.pathname === '/' && INSIGHTS_PARAMS.some(p => url.searchParams.has(p))) return text(302, '', { location: `/insights?${url.searchParams}` });
     try {
-      const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: url.pathname === '/settlement' ? 2 : null, history: historyFor(url) });
+      const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: url.pathname === '/settlement' ? 2 : null, history: historyFor(url), trailHours: trailHoursFor(url) });
       if (url.pathname === '/healthz') return { status: 200, type: 'application/json', body: JSON.stringify({ ok: true, collectorStale: !!state.stale, dailySyncError: model.snapshot.error ?? null }) };
       if (url.pathname.startsWith('/game/')) {
         let parts;
@@ -133,7 +146,7 @@ export function createWebServer({ read, log = null, exporter = null, version = (
         const math = gameModel(state.math, slug);
         const modeRows = Array.isArray(state.modeRows?.[slug]) ? state.modeRows[slug] : [];
         const modeDays = state.modeDays?.[slug] ?? {};
-        if (section === undefined) return page(renderGamePage({ slug, model, state, math, modeRows, modeDays, span: spanOf(url.searchParams.get('span')), online: url.searchParams.get('online') }), slug, state);
+        if (section === undefined) return page(renderGamePage({ slug, model, state, math, modeRows, modeDays, span: spanOf(url.searchParams.get('span'), GAME_SPANS), online: url.searchParams.get('online') }), slug, state);
         if (section === 'mode' && mode) return page(renderModePage({ slug, mode, model, state, math, modeRows, modeDays }), `${slug} ${mode}`, state);
         if (section === 'buckets' && !mode) {
           const gameTrail = state.gameTrails?.[slug] ?? [];
@@ -164,6 +177,13 @@ export function createWebServer({ read, log = null, exporter = null, version = (
         query.delete('fragment');
         const { page: entries, sources, source } = await log(query);
         return page(renderLog({ state, page: entries, sources, source, total: entries.total }), 'Poll log', state);
+      }
+      if (url.pathname === '/archive') {
+        // A store that cannot be listed (S3 unreachable, credentials wrong)
+        // is said on the page, not turned into a 503 for the whole page.
+        let listing;
+        try { listing = await archive.list(); } catch (err) { listing = { ...(archive.describe?.() ?? {}), files: [], error: String(err?.message ?? err) }; }
+        return page(renderArchive({ state, listing }), 'Archive', state);
       }
       if (url.pathname === '/') return page(renderHome(state), 'Overview', state);
       if (url.pathname === '/live') {
@@ -222,6 +242,21 @@ export function createWebServer({ read, log = null, exporter = null, version = (
       return res.end(req.method === 'HEAD' ? '' : zipped ? file.gzip : file.body);
     }
     if (url.pathname === '/favicon.ico') return send(204, '', 'image/x-icon');
+    if (url.pathname.startsWith('/archive/file/')) {
+      // The local store's files. An S3 store answers null here - its links go
+      // straight to S3, presigned - and so does any name that is not exactly
+      // an archive's, so nothing outside the archive directory is reachable.
+      let name;
+      try { name = decodeURIComponent(url.pathname.slice('/archive/file/'.length)); } catch { return send(404, 'Not found', 'text/plain'); }
+      let file = null;
+      try { file = archive ? await archive.open(name) : null; } catch { file = null; }
+      if (!file) return send(404, 'Not found', 'text/plain');
+      res.writeHead(200, { ...HEADERS, 'content-type': 'application/gzip', 'content-length': String(file.size),
+        'content-disposition': `attachment; filename="${name}"` });
+      if (req.method === 'HEAD') { file.stream.destroy(); return res.end(); }
+      try { await pipeline(file.stream, res); } catch { res.destroy(); }
+      return;
+    }
     if (url.pathname === '/export/log.csv') {
       // Raw poll-log CSV, streamed chunk by chunk straight out of Redis: a
       // whole day of every stream is a few hundred thousand rows, and holding

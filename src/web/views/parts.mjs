@@ -10,8 +10,18 @@ import { usd, int, utcHm, money, DASH } from '../format.mjs';
 import { toUsd, toShareUsd, DEFAULT_MONEY } from '../../money.mjs';
 import { SPANS } from '../../insights/span.mjs';
 
+/** The alert every screen carries while Redis is over its memory limit, or null. */
+export function memoryAlertText(memory) {
+  if (!memory?.over) return null;
+  return `REDIS MEMORY ${memory.human} - over the ${memory.limitHuman} limit (REDIS_DB_SIZE). Shorten retention.trailDays, or raise the limit if the machine has room.`;
+}
+
 export function banner(state) {
   const parts = [];
+  const memory = memoryAlertText(state.redisMemory);
+  // Sticky: it stays pinned at the top however far the page is scrolled, for
+  // as long as the database is over the limit.
+  if (memory) parts.push(html`<div class="banner bad sticky" role="alert">${memory}</div>`);
   if (state.meta?.auth_state && state.meta.auth_state !== 'ok') {
     parts.push(html`<div class="banner bad">SID EXPIRED - polling is paused. Drop a new sid into .sid and it resumes on the next tick.</div>`);
   }
@@ -98,9 +108,9 @@ export function actionLog(summaries, money_ = DEFAULT_MONEY) {
  * The time picker, as plain links so it works without script and survives the
  * live refresh (the refresh re-fetches the same URL, span included).
  */
-export function spanPicker(path, span) {
-  return html`<span class="quick-ranges span-picker">${Object.entries(SPANS).map(([key, s]) =>
-    html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}">${s.label}</a>`)}</span>`;
+export function spanPicker(path, span, keys = Object.keys(SPANS)) {
+  return html`<span class="quick-ranges span-picker">${keys.map((key) =>
+    html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}">${SPANS[key].label}</a>`)}</span>`;
 }
 
 /** A chart's headline, or a plain statement that nothing was measured. */

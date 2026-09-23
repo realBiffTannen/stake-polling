@@ -13,6 +13,7 @@ const NAV = [
   { key: 'trends', href: '/trends', glyph: '◈', label: 'Trends' },
   { key: 'math', href: '/math', glyph: '∑', label: 'Game math' },
   { key: 'log', href: '/log', glyph: '≡', label: 'Poll log' },
+  { key: 'archive', href: '/archive', glyph: '⤓', label: 'Archive' },
   { key: 'donate', href: '/donate', glyph: '♥', label: 'Donations' },
 ];
 

@@ -115,7 +115,11 @@ function warnAboutNvm(program) {
  * only reports - enabling a brew service is the user's call to make.
  */
 async function reportRedis() {
-  const local = /^redis:\/\/(127\.0\.0\.1|localhost)(:|$)/.test(config.redisUrl);
+  // By hostname, not by prefix: a URL carrying credentials
+  // (redis://user:pass@127.0.0.1) is just as local.
+  let host = null;
+  try { host = new URL(config.redisUrl).hostname; } catch { /* unparseable: not local */ }
+  const local = host === '127.0.0.1' || host === 'localhost';
   if (!local) return;
   const listed = await execRun('brew', ['services', 'list']);
   if (listed.code !== 0) return;

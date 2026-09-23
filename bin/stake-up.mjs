@@ -17,11 +17,12 @@ import { networkInterfaces } from 'node:os';
 import { loadConfig } from '../src/config.mjs';
 import { lanUrls } from '../src/net/addresses.mjs';
 import { waitForRedis, redisProbe } from '../src/store/wait-for-redis.mjs';
+import { redactUrl } from '../src/store/redis.mjs';
 
 const config = loadConfig();
 let host = process.env.STAKE_WEB_HOST ?? config.web?.host ?? '0.0.0.0';
 let port = Number(process.env.STAKE_WEB_PORT ?? config.web?.port ?? 3005);
-let poll = true, web = true, sync = true;
+let poll = true, web = true, sync = true, archive = true;
 // Zero by default: started by hand, a missing Redis is a mistake worth
 // reporting at once. The launchd agent sets this, because at login it starts
 // before brew's redis and must wait rather than crash-loop.
@@ -33,9 +34,10 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--no-poll') poll = false;
   else if (args[i] === '--no-web') web = false;
   else if (args[i] === '--no-sync') sync = false;
+  else if (args[i] === '--no-archive') archive = false;
   else if (args[i] === '--wait-for-redis') waitForRedisMs = Number(args[++i]);
   else if (args[i] === '--help') {
-    console.log('Usage: npm start -- [--port 3005] [--host 0.0.0.0] [--no-poll] [--no-web] [--no-sync] [--wait-for-redis <ms>]');
+    console.log('Usage: npm start -- [--port 3005] [--host 0.0.0.0] [--no-poll] [--no-web] [--no-sync] [--no-archive] [--wait-for-redis <ms>]');
     console.log('The dashboard is unauthenticated. --host 127.0.0.1 keeps it on this machine.');
     process.exit(0);
   } else { console.error(`Unknown option: ${args[i]}`); process.exit(1); }
@@ -54,29 +56,39 @@ const up = await waitForRedis({
   // A zero wait still gets one attempt - it is the retrying that is optional.
   timeoutMs: waitForRedisMs,
   onRetry: (err, attempt) => {
-    if (attempt === 1) console.error(`Redis is not reachable at ${config.redisUrl} (${err.message}). Waiting up to ${Math.round(waitForRedisMs / 1000)}s for it.`);
+    if (attempt === 1) console.error(`Redis is not reachable at ${redactUrl(config.redisUrl)} (${err.message}). Waiting up to ${Math.round(waitForRedisMs / 1000)}s for it.`);
     else if (attempt % 15 === 0) console.error(`still waiting for Redis (${attempt} attempts)`);
   },
 });
 if (!up) {
-  console.error(`Redis is not reachable at ${config.redisUrl}.`);
+  console.error(`Redis is not reachable at ${redactUrl(config.redisUrl)}.`);
   console.error('Start it (brew services start redis, or redis-server) and run npm start again.');
   process.exit(1);
 }
 
-const children = [];
-function start(name, file, extra) {
+const children = new Set();
+// Essential children (collector, dashboard) take the rest down with them.
+// The archiver is not: whatever happens to an upload, polling carries on, and
+// the archiver is simply started again a minute later.
+function start(name, file, extra, { essential = true } = {}) {
   const child = spawn(process.execPath, [new URL(file, import.meta.url).pathname, ...extra], { stdio: 'inherit' });
   child.on('exit', (code, signal) => {
+    children.delete(child);
     if (stopping) return;
+    if (!essential) {
+      console.error(`${name} exited (${signal ?? code}); polling carries on. Restarting it in 60s.`);
+      setTimeout(() => { if (!stopping) start(name, file, extra, { essential }); }, 60_000).unref();
+      return;
+    }
     console.error(`${name} exited (${signal ?? code}). Stopping the rest.`);
     shutdown();
   });
-  children.push(child);
+  children.add(child);
 }
 
 if (poll) start('collector', '../bin/stake-poller.mjs', ['--wait-for-lock']);
 if (web) start('dashboard', '../bin/stake-web.mjs', ['--host', host, '--port', String(port), ...(sync ? [] : ['--no-sync'])]);
+if (archive) start('archiver', '../bin/stake-archive.mjs', [], { essential: false });
 
 if (web) {
   console.log('Dashboard:');

@@ -2,6 +2,8 @@
 import { createClient } from 'redis';
 import { loadConfig } from '../src/config.mjs';
 import { keys } from '../src/store/keys.mjs';
+import { redisOptions } from '../src/store/redis.mjs';
+import { storeFor, dashboardArchive } from '../src/archive/stores.mjs';
 import { readDashboard, readTrails, readSnapshot, readModeTrail, readTeamTrailSince, readSince } from '../src/store/reader.mjs';
 import { buildState } from '../src/tui/state.mjs';
 import { ApiClient } from '../src/api/client.mjs';
@@ -40,7 +42,7 @@ for (let i = 0; i < args.length; i++) {
 if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
   console.error('Provide a host and a port between 1 and 65535.'); process.exit(1);
 }
-const client = createClient({ url: config.redisUrl, socket: { connectTimeout: 5000, reconnectStrategy: n => n < 3 ? 500 : false } });
+const client = createClient({ ...redisOptions(config.redisUrl), socket: { connectTimeout: 5000, reconnectStrategy: n => n < 3 ? 500 : false } });
 client.on('error', () => console.error('Redis connection unavailable.'));
 try { await client.connect(); } catch { console.error('Start Redis, then run npm run web again.'); process.exit(1); }
 
@@ -76,13 +78,15 @@ const readData = () => dataCache.get();
 // Per-mode trails, memoised per data version: the analysis page wants every
 // game's, and re-reading 13 streams for each span of it would undo the cache.
 let modeMemo = { version: null, trails: new Map() };
-// Seven days of one stream, read by time and memoised per data version, for
-// the players-online chart and the hour-of-day profile.
+// One stream read back by time and memoised per data version: seven days of
+// it for the players-online chart and the hour-of-day profile, and as long as
+// the span for an analysis window beyond the shared 24-hour trail.
 let historyMemo = { version: null, streams: new Map() };
-function historyOf(version, key, now) {
+function historyOf(version, key, now, hours = 7 * 24) {
   if (historyMemo.version !== version) historyMemo = { version, streams: new Map() };
-  if (!historyMemo.streams.has(key)) historyMemo.streams.set(key, readSince(client, key, now - 7 * 86_400_000 - 30 * 60_000));
-  return historyMemo.streams.get(key);
+  const id = `${hours}h:${key}`;
+  if (!historyMemo.streams.has(id)) historyMemo.streams.set(id, readSince(client, key, now - hours * 3_600_000 - 30 * 60_000));
+  return historyMemo.streams.get(id);
 }
 async function modeTrailFor(version, slug) {
   if (modeMemo.version !== version) modeMemo = { version, trails: new Map() };
@@ -112,7 +116,14 @@ async function exporter(query) {
   if (!one) return null;
   return { filename: `stake-${source}-${date ?? 'retained'}.csv`, chunks: wideCsv(client, one, bounds) };
 }
-const server = createWebServer({ log, exporter, version: () => dataCache.version(), pageTtlMs: periodMs(config.pollMinutes), read: async (query, hint) => {
+// The nightly archive's store, for the archive page: the files it holds, a
+// download link for each, and the archiver's last run. The web process never
+// writes to it - bin/stake-archive.mjs does.
+let archiveStore = null;
+let archiveSetupError = null;
+try { archiveStore = await storeFor(config); } catch (err) { archiveSetupError = String(err?.message ?? err); }
+const archive = dashboardArchive({ store: archiveStore, setupError: archiveSetupError, readStatus: () => readSnapshot(client, k.archiveStatus) });
+const server = createWebServer({ log, exporter, archive, version: () => dataCache.version(), pageTtlMs: periodMs(config.pollMinutes), read: async (query, hint) => {
   const { dashboard, trails, snapshot, modeRollup, catalogue } = await readData(), now = Date.now();
   const state = buildState(dashboard, trails, now, config);
   const listings = state.rows.map(r => ({ slug: r.name, name: r.label }));
@@ -163,6 +174,20 @@ const server = createWebServer({ log, exporter, version: () => dataCache.version
     state.history = hint.history === 'studio'
       ? { online: await historyOf(v, k.tsOnline, now), team: await historyOf(v, k.tsTeam, now) }
       : { game: await historyOf(v, k.tsGame(hint.history), now) };
+  }
+  // An analysis span longer than the shared trail (Last 3 days) reads its own
+  // trails by time - by count, the trail's older, denser eras would cover less
+  // than the label says. Kept apart from gameTrails/modeTrails, which the tape
+  // and the quiet share read as the last 24 hours whatever span is picked.
+  if (hint?.trailHours) {
+    const v = dashboard.meta?.last_ok ?? null;
+    const slugs = dashboard.gameNames;
+    const [online, ...read] = await Promise.all([historyOf(v, k.tsOnline, now, hint.trailHours),
+      ...slugs.map(slug => historyOf(v, k.tsGame(slug), now, hint.trailHours)),
+      ...slugs.map(slug => historyOf(v, k.tsGameModes(slug), now, hint.trailHours))]);
+    state.spanTrails = { online,
+      games: Object.fromEntries(slugs.map((slug, i) => [slug, read[i]])),
+      modes: Object.fromEntries(slugs.map((slug, i) => [slug, read[slugs.length + i]])) };
   }
   // The poll tick this state was built from - the page cache's key.
   state.dataVersion = dashboard.meta?.last_ok ?? null;
