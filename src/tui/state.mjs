@@ -4,6 +4,7 @@ import { dayStart, sumSince, coverage } from '../window.mjs';
 import { synthesise } from '../detect/events.mjs';
 import { liveListings, idOf } from '../games.mjs';
 import { num } from './format.mjs';
+import { memoryStatus } from '../store/memory.mjs';
 
 // Two and a half poll periods: one missed tick is not yet a problem, two is.
 // Tied to the period so that slowing the poller down does not make the whole
@@ -109,6 +110,8 @@ export function buildState(dashboard, trails, now = Date.now(), config = {}) {
     perGame: dashboard?.perGame ?? {},
     alerts: dashboard?.alerts ?? [],
     meta: dashboard?.meta ?? {},
+    // Null when INFO could not be read - never a database with room to spare.
+    redisMemory: memoryStatus(dashboard?.redisMemory, config.redisMemoryLimitBytes),
     lastOk,
     ageMs: lastOk ? now - lastOk : null,
     stale: lastOk ? now - lastOk > pollMinutes * 60000 * STALE_MULTIPLE : true,

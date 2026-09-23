@@ -18,7 +18,7 @@ import { int, usd, DASH } from '../format.mjs';
 import { formatUsd, formatUsdSigned } from '../../money.mjs';
 import { chartPanel, conclusion } from './parts.mjs';
 import { buildInsights } from '../../insights/model.mjs';
-import { onlineSlots, thinMax, onlineHeadline, movingAverage, cumulative, weekOnWeek, hourOfDay, turnoverByGame } from '../../insights/series.mjs';
+import { onlineSlots, thinMax, onlineHeadline, movingAverage, cumulative, weekOnWeek, hourOfDay, turnoverByGame, hourByDay, dailyTrend } from '../../insights/series.mjs';
 import { dailyPnl } from '../../insights/conclusions.mjs';
 import { holdTable } from '../../insights/economics.mjs';
 import { lineChart } from '../charts/line.mjs';
@@ -27,6 +27,7 @@ import { stackedBars } from '../charts/bars.mjs';
 import { timeLine } from '../charts/time.mjs';
 import { PAIR_COLOURS } from '../charts/hbars.mjs';
 import { GAME_COLOURS, OTHER_COLOUR } from '../charts/donut.mjs';
+import { interactiveChart, emptyChart, heatmapData, dailyData } from '../charts/interactive.mjs';
 
 /** The players-online ranges, in hours. 24 hours is the default. */
 export const ONLINE_RANGES = { '6h': 6, '24h': 24, '3d': 72, '7d': 168 };
@@ -90,15 +91,18 @@ function rangePicker(href, current) {
 }
 
 /** Players online per poll slot; ranges past a day fold to 15-minute peaks. */
-function onlinePanel({ title, samples, now, range, href }) {
+/** The poll interval in minutes, as configured; 2.5 when the state does not say. */
+const pollOf = (state) => (Number(state?.pollMinutes) > 0 ? Number(state.pollMinutes) : 2.5);
+
+function onlinePanel({ title, samples, now, range, href, poll = 2.5 }) {
   const hours = ONLINE_RANGES[range];
-  let points = onlineSlots(samples ?? [], { now, hours });
+  let points = onlineSlots(samples ?? [], { now, hours, slotMs: poll * 60_000 });
   if (hours > 24) points = thinMax(points, 15 * 60_000);
   return html`<section class="panel chart-panel"><div class="section-heading"><div><h2>${title}</h2>
       <p class="conclusion">${onlineHeadline(points, { now }) ?? 'Nothing measured in this range yet.'}</p></div>
       ${rangePicker(href, range)}</div>
     ${timeLine({ points, title: 'players online', format: (v) => int(v) })}
-    <div class="chart-foot"><span>${hours > 24 ? 'Each point is the peak of 15 minutes of 2.5-minute polls.' : 'One point per 2.5-minute poll. A missed poll breaks the line.'}</span><span>Hover for the reading</span></div></section>`;
+    <div class="chart-foot"><span>${hours > 24 ? `Each point is the peak of 15 minutes of ${poll}-minute polls.` : `One point per ${poll}-minute poll. A missed poll breaks the line.`}</span><span>Hover for the reading</span></div></section>`;
 }
 
 /** The last 30 UTC days from the daily-insights snapshot, for the studio or one game. */
@@ -154,6 +158,25 @@ function hourPanel(trail, now) {
     'Averaged over the last 7 days of the collector\'s trail. When play happens, not how much of it.');
 }
 
+/** Bets in every hour of the last 7 UTC days: the hour-of-day profile, one day at a time. */
+function hourByDayPanel(trail, now) {
+  const grid = hourByDay(trail ?? [], 'count', { now, days: 7, noun: 'bets' });
+  const data = heatmapData(grid, { noun: 'bets' });
+  return chartPanel('Hour by day', grid.headline,
+    data.cells.length ? interactiveChart({ id: 'hour-by-day', kind: 'heatmap', title: 'Bets in each UTC hour of the last 7 days', data })
+      : emptyChart('The collector\'s trail has no bets in the last 7 days yet.'),
+    'Bets per UTC hour from the collector\'s trail. A dashed outline is an hour it missed - empty, not zero; today stops at the hour now.');
+}
+
+/** Daily turnover and studio P/L over the 30 days the daily panels chart, zoomable. */
+function dailyZoomPanel(model) {
+  const trend = dailyTrend(model.daily ?? []);
+  return chartPanel('Turnover and studio P/L, day by day', trend.headline,
+    trend.headline ? interactiveChart({ id: 'daily-zoom', kind: 'daily', title: 'Daily turnover and studio P/L over the last 30 UTC days', data: dailyData(trend) })
+      : emptyChart('The daily sync has not stored any days yet.'),
+    'Drag either end of the slider to zoom into any stretch of the last 30 UTC days. Turnover and P/L each keep their own scale; a day the sync missed is a gap, not a zero.');
+}
+
 /**
  * The studio's trends, for /trends. `online` is the players-online range
  * parameter and `turnover` the game picked in the turnover legend; each
@@ -166,10 +189,12 @@ export function studioTrendPanels({ state, online = null, turnover = null }) {
   const byGame = turnoverByGame(state.dailySnapshot ?? {}, { from: model.from, to: model.to, money: state.money, focus: turnover });
   const allModes = Object.values(state.modeRows ?? {}).flat();
   return html`
-  ${onlinePanel({ title: 'Players online, every 2.5 minutes', samples: state.history?.online, now, range, href: (key) => trendsHref({ online: key, turnover: byGame.focus }) })}
+  ${onlinePanel({ title: `Players online, every ${pollOf(state)} minutes`, poll: pollOf(state), samples: state.history?.online, now, range, href: (key) => trendsHref({ online: key, turnover: byGame.focus }) })}
   ${dailyPanels(model, { modeRows: allModes, scope: 'all games' })}
+  ${dailyZoomPanel(model)}
   ${turnoverPanel(byGame, { online: online === range ? range : null })}
-  ${hourPanel(state.history?.team, now)}`;
+  ${hourPanel(state.history?.team, now)}
+  ${hourByDayPanel(state.history?.team, now)}`;
 }
 
 /** One game's trends, for its page. Keeps the page's span in the picker links. */
@@ -179,7 +204,7 @@ export function gameTrendPanels({ slug, name, state, modeRows = [], span = 'mont
   const base = `/game/${encodeURIComponent(slug)}`;
   const href = (key) => `${base}?${new URLSearchParams({ span, online: key })}`;
   return html`
-  ${onlinePanel({ title: `Players online in ${name}, every 2.5 minutes`, samples: state.history?.game, now, range, href })}
+  ${onlinePanel({ title: `Players online in ${name}, every ${pollOf(state)} minutes`, poll: pollOf(state), samples: state.history?.game, now, range, href })}
   ${dailyPanels(thirtyDays(state, slug), { modeRows, scope: name })}
   ${hourPanel(state.history?.game, now)}`;
 }

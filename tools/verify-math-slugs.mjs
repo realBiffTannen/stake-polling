@@ -8,6 +8,7 @@
  * than assumed. READ-ONLY: this script only ever calls GET on Redis.
  */
 import { createClient } from 'redis';
+import { redisOptions } from '../src/store/redis.mjs';
 import { loadConfig } from '../src/config.mjs';
 import { keys } from '../src/store/keys.mjs';
 import { loadMathModel } from '../src/math/checks.mjs';
@@ -15,7 +16,7 @@ import { loadMathModel } from '../src/math/checks.mjs';
 const config = loadConfig();
 const k = keys(config.team);
 const model = loadMathModel(new URL('../math.json', import.meta.url).pathname);
-const client = createClient({ url: config.redisUrl });
+const client = createClient(redisOptions(config.redisUrl));
 await client.connect();
 
 const listing = JSON.parse((await client.get(k.games)) ?? '{}');

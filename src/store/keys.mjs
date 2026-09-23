@@ -19,6 +19,16 @@ export function keys(team) {
     modeRollup: `${ns}:insights:modes:v1`,
     catalogue: `${ns}:insights:catalogue:v1`,
     lockInsights: `${ns}:lock:daily-insights`,
+    lockArchive: `${ns}:lock:archive`,
+    // Dashboard sign-in (src/web/auth.mjs): the credentials record, a counter
+    // that versions them, and one key per session named by its token's hash.
+    auth: `${ns}:auth`,
+    authEpoch: `${ns}:auth:epoch`,
+    session: (hash) => `${ns}:session:${hash}`,
+    // Standing warnings dismissed for everyone (web views/parts.mjs).
+    dismissed: `${ns}:dismissed`,
+    // The nightly archive's last run, for the archive page (src/archive).
+    archiveStatus: `${ns}:archive:status`,
     roster: `${ns}:roster:latest`,
     games: `${ns}:games:latest`,
     graph: `${ns}:graph:latest`,

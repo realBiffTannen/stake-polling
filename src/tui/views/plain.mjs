@@ -35,6 +35,7 @@ export function renderPlain(state) {
   lines.push(`${state.meta?.team ?? 'roster'} @ ${new Date(state.now).toISOString()}`);
   lines.push(`online ${int(state.online)}  position ${formatUsd(state.team)}  carry ${formatUsd(state.carry)}  last poll ${state.ageMs === null ? 'never' : `${humanAge(state.ageMs)} ago`}${state.stale ? ' (STALE)' : ''}`);
   lines.push(`sid ${state.meta?.auth_state ?? 'unknown'} via ${state.meta?.sid_source || 'n/a'}  aof ${state.meta?.persistence ?? 'unknown'}`);
+  if (state.redisMemory?.over) lines.push(`REDIS MEMORY ${state.redisMemory.human} over the ${state.redisMemory.limitHuman} limit (REDIS_DB_SIZE)`);
   const day = dayTotals(state);
   lines.push(`day since ${new Date(state.dayFrom).toISOString().slice(11, 16)}Z  bets ${intSigned(day.count)}  turnover ${formatUsd(day.turnover)}  profit ${formatUsdSigned(day.profit)}${state.dayCoverage?.partial ? (state.dayCoverage.fromTs ? '  (partial window)' : '  (no trail in this window yet)') : ''}`);
   lines.push('');

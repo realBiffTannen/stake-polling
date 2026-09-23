@@ -1,6 +1,8 @@
 import { html } from '../html.mjs';
 import { int, pct, DASH } from '../format.mjs';
 import { shell } from './shell.mjs';
+import { dismissibleNotice } from './parts.mjs';
+import { ICONS } from './icons.mjs';
 import { mathDrift } from '../../math/checks.mjs';
 
 export function renderMath({ model, state, math = {}, live = [] }) {
@@ -14,12 +16,15 @@ export function renderMath({ model, state, math = {}, live = [] }) {
       <p>The certified model each game was approved with. Deployed figures are compared against these on every game page.</p></div>
     <span class="tag">${entries.length} models</span></div>
 
-  ${drift.length ? html`<div class="notice warning"><b>Deployed math differs from math.json</b> - a new math version was published or a mode was added, so recapture these games from the studio dashboard's Math tab:
-      <ul>${drift.map(([slug, found]) => html`<li><b>${nameOf(slug)}</b>: ${found.map(d => d.message).join('; ')}</li>`)}</ul></div>` : null}
+  ${drift.length ? dismissibleNotice('math-drift', drift.map(([slug, found]) => `${slug}=${found.map(d => d.message).join(';')}`).join('|'),
+    html`<b>Deployed math differs from math.json</b> - a new math version was published or a mode was added, so recapture these games from the studio dashboard's Math tab:
+      <ul>${drift.map(([slug, found]) => html`<li><b>${nameOf(slug)}</b>: ${found.map(d => d.message).join('; ')}</li>`)}</ul>`, { dismissed: state.dismissed, back: '/math' }) : null}
 
-  ${gaps.length ? html`<div class="notice warning">Live with no captured model: ${gaps.map(slug => html`<b>${slug}</b> `)}. Those games show observed figures only - no drift, convergence or tail verdict can be produced for them.</div>` : null}
+  ${gaps.length ? dismissibleNotice('math-uncaptured', gaps.join(','),
+    html`Live with no captured model: ${gaps.map(slug => html`<b>${slug}</b> `)}. Those games show observed figures only - no drift, convergence or tail verdict can be produced for them.`, { dismissed: state.dismissed, back: '/math' }) : null}
 
-  <section class="panel"><div class="scroll"><table><thead><tr>
+  <section class="panel"><div class="table-tools"><label class="search-field">${ICONS.search}<input type="search" placeholder="Filter games" aria-label="Filter games" data-filter-table="#math-table" autocomplete="off" spellcheck="false"></label><span class="dim" data-filter-count aria-live="polite"></span></div>
+    <div class="scroll"><table id="math-table"><thead><tr>
       <th>Game</th><th>Version</th><th>RTP</th><th>Base volatility</th><th>Star level</th><th>Max win</th><th>Modes</th><th>Cost ladder</th><th>2★</th><th>3★</th><th>Live</th></tr></thead>
     <tbody>${entries.map(([slug, g]) => {
       const starLevel = g.starLevel === null || g.starLevel === undefined ? DASH : g.starLevel;

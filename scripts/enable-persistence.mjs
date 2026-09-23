@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline/promises';
 import { loadConfig } from '../src/config.mjs';
-import { connect, appendOnlyEnabled } from '../src/store/redis.mjs';
+import { connect, appendOnlyEnabled, redactUrl } from '../src/store/redis.mjs';
 
 // Turning on AOF edits the user's global Redis configuration - every database
 // on that server, not just ours. That is not something to do behind their
@@ -11,7 +11,7 @@ const config = loadConfig();
 const client = await connect(config.redisUrl);
 
 const current = await appendOnlyEnabled(client);
-console.log(`redis: ${config.redisUrl}`);
+console.log(`redis: ${redactUrl(config.redisUrl)}`);
 console.log(`appendonly is currently: ${current === null ? 'unknown (CONFIG is restricted)' : current ? 'yes' : 'no'}`);
 
 if (current === true) {

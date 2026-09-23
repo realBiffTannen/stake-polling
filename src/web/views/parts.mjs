@@ -5,13 +5,43 @@
  * from a pane that failed to render, and one of those is a symptom.
  */
 
-import { html } from '../html.mjs';
+import { createHash } from 'node:crypto';
+import { html, raw } from '../html.mjs';
+import { fill } from '../fills.mjs';
 import { usd, int, utcHm, money, DASH } from '../format.mjs';
 import { toUsd, toShareUsd, DEFAULT_MONEY } from '../../money.mjs';
 import { SPANS } from '../../insights/span.mjs';
 
+/**
+ * A standing warning that can be dismissed - a fact that stays true until
+ * someone acts on it, not a live fault. Dismissing is a form POST to /dismiss
+ * (server.mjs), kept in Redis, so it holds for every browser and every user;
+ * `dismissed` is that set, and a dismissed warning renders as nothing.
+ *
+ * The key is a fingerprint of `text`: pass the warning's substance, so a
+ * warning that changes - another game drifts - is a new key and shows again.
+ * The CSRF field is a request-time fill, because the page itself is cached.
+ */
+export const dismissKey = (id, text) => `${id}:${createHash('sha256').update(String(text)).digest('hex').slice(0, 12)}`;
+
+export function dismissibleNotice(id, text, content, { dismissed = null, back = '/' } = {}) {
+  const key = dismissKey(id, text);
+  if (dismissed?.has?.(key)) return null;
+  return html`<div class="notice warning dismissible" data-dismiss-key="${key}">${content}<form method="post" action="/dismiss" class="dismiss-form" data-dismiss-form>${fill('csrf-input', '')}<input type="hidden" name="key" value="${key}"><input type="hidden" name="back" value="${back}"><button type="submit" class="dismiss" aria-label="Dismiss this warning for everyone" title="Dismiss for everyone">×</button></form></div>`;
+}
+
+/** The alert every screen carries while Redis is over its memory limit, or null. */
+export function memoryAlertText(memory) {
+  if (!memory?.over) return null;
+  return `REDIS MEMORY ${memory.human} - over the ${memory.limitHuman} limit (REDIS_DB_SIZE). Shorten retention.trailDays, or raise the limit if the machine has room.`;
+}
+
 export function banner(state) {
   const parts = [];
+  const memory = memoryAlertText(state.redisMemory);
+  // Sticky: it stays pinned at the top however far the page is scrolled, for
+  // as long as the database is over the limit.
+  if (memory) parts.push(html`<div class="banner bad sticky" role="alert">${memory}</div>`);
   if (state.meta?.auth_state && state.meta.auth_state !== 'ok') {
     parts.push(html`<div class="banner bad">SID EXPIRED - polling is paused. Drop a new sid into .sid and it resumes on the next tick.</div>`);
   }
@@ -98,9 +128,9 @@ export function actionLog(summaries, money_ = DEFAULT_MONEY) {
  * The time picker, as plain links so it works without script and survives the
  * live refresh (the refresh re-fetches the same URL, span included).
  */
-export function spanPicker(path, span) {
-  return html`<span class="quick-ranges span-picker">${Object.entries(SPANS).map(([key, s]) =>
-    html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}">${s.label}</a>`)}</span>`;
+export function spanPicker(path, span, keys = Object.keys(SPANS)) {
+  return html`<span class="quick-ranges span-picker" role="group" aria-label="Time span">${keys.map((key) =>
+    html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}"${key === span ? raw(' aria-current="true"') : null}>${SPANS[key].label}</a>`)}</span>`;
 }
 
 /** A chart's headline, or a plain statement that nothing was measured. */
@@ -109,7 +139,10 @@ export function conclusion(headline) {
 }
 
 /** One chart panel: title, the conclusion it supports, the chart, an optional footnote. */
+/** A stable, readable anchor for a panel title: "Luck or fault?" -> "p-luck-or-fault". */
+export const panelId = (title) => `p-${String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+
 export function chartPanel(title, headline, chart, note = null) {
-  return html`<section class="panel chart-panel"><div class="section-heading"><div><h2>${title}</h2>
+  return html`<section class="panel chart-panel" id="${panelId(title)}"><div class="section-heading"><div><h2>${title}</h2>
       ${conclusion(headline)}</div></div>${chart}${note ? html`<div class="chart-foot"><span>${note}</span></div>` : null}</section>`;
 }

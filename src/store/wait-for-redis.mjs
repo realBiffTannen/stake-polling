@@ -9,6 +9,7 @@
  */
 
 import { createClient } from 'redis';
+import { redisOptions } from './redis.mjs';
 
 /**
  * @param {{
@@ -39,7 +40,7 @@ export async function waitForRedis({ probe, retryMs = 2000, timeoutMs = 120000, 
 /** A single connect-ping-quit against a real server. The default probe. */
 export function redisProbe(url, { connectTimeout = 5000 } = {}) {
   return async () => {
-    const client = createClient({ url, socket: { connectTimeout, reconnectStrategy: () => false } });
+    const client = createClient({ ...redisOptions(url), socket: { connectTimeout, reconnectStrategy: () => false } });
     client.on('error', () => {});
     try {
       await client.connect();

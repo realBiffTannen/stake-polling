@@ -49,6 +49,9 @@ export function renderFrame(state, { cols = 80, rows = 24 } = {}) {
   if (state.meta?.auth_state === 'expired') {
     out.push(box.line(`${C.redBg} SID EXPIRED - polling paused, put a new sid in .sid ${C.reset}`));
   }
+  if (state.redisMemory?.over) {
+    out.push(box.line(`${C.redBg} REDIS MEMORY ${state.redisMemory.human} over the ${state.redisMemory.limitHuman} limit (REDIS_DB_SIZE) ${C.reset}`));
+  }
 
   out.push(box.rule());
 

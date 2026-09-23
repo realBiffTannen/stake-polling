@@ -87,7 +87,7 @@ export function renderBucketsPage({ slug, model, state, cadence, gameTrail = [],
         ${profits.modes.map(m => html`<td>${money(toShareUsd(r.byMode[m], moneyCfg.profitShare, moneyCfg), { signed: true })}</td>`)}</tr>`)}</tbody></table></div>`
       : html`<p class="dim">No per-mode trail yet - bonus-round columns fill in as the poller runs.</p>`}</section>`;
 
-  return shell({ state, body, active: 'overview', title: `${name} · ${selected}` });
+  return shell({ state, body, active: 'overview', title: `${name} · ${selected}`, crumbs: [{ label: name, href: `/game/${encodeURIComponent(slug)}` }, { label: 'Bucket cadence' }] });
 }
 
 /** Trim buckets neither the totals nor the mode breakdown reached, from each end - never from the middle. */

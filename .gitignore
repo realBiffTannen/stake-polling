@@ -10,3 +10,14 @@ node_modules/
 /config.local.json
 /math.json
 .claude/settings.local.json
+
+# Secrets and switches for this install (REDIS_PASSWORD, S3_BUCKET, AWS_*).
+/.env
+# The nightly archive when no S3_BUCKET is configured.
+/stake-polling-logrotate-data/
+
+# Agent worktrees made by Claude Code.
+/.claude/worktrees/
+
+# The demo site, built by npm run demo:build.
+/dist/

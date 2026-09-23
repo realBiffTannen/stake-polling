@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { loadConfig } from '../src/config.mjs';
-import { connect, appendOnlyEnabled } from '../src/store/redis.mjs';
+import { connect, appendOnlyEnabled, redactUrl } from '../src/store/redis.mjs';
 import { writeMeta } from '../src/store/writer.mjs';
 import { keys } from '../src/store/keys.mjs';
 import { ApiClient } from '../src/api/client.mjs';
@@ -93,7 +93,7 @@ let paused = false;
 let lastChromeAttempt = 0;
 let lastSidFileValue = await readSidFile(config.sidFile);
 
-log(`polling ${config.apiUrl}/teams/${config.team} into ${config.redisUrl} every ${config.pollMinutes} minute${config.pollMinutes === 1 ? '' : 's'}, aligned to the clock`);
+log(`polling ${config.apiUrl}/teams/${config.team} into ${redactUrl(config.redisUrl)} every ${config.pollMinutes} minute${config.pollMinutes === 1 ? '' : 's'}, aligned to the clock`);
 
 while (!stopping.signal.aborted) {
   await sleep(msToNextBoundary(Date.now(), config.pollMinutes), stopping.signal);

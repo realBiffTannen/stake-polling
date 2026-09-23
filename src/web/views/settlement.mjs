@@ -94,7 +94,7 @@ export function renderSettlement({ state, settlement: s, health: h }) {
 
   <section class="panel definitions"><div class="section-heading"><h2>How these are counted</h2></div>
     <div class="definition-grid">
-      <div><h3>Settled against position</h3><p>Stake settles on the share rate times the summed roster profit, plus carry - not on the balance endpoint's position. The two usually agree to the cent; in August 2026 they differed by $48, and the settlement followed the roster. The residual above is that difference, live.</p></div>
+      <div><h3>Settled against position</h3><p>Stake settles on the share rate times the summed roster profit, plus carry - not on the balance endpoint's position. The two usually agree to the cent, but not always, and when they differ the settlement follows the roster. The residual above is that difference, live.</p></div>
       <div><h3>Carry</h3><p>A month that settles negative pays nothing and carries its deficit into the next. The balance endpoint folds carry into both position and its expectation, so this month's expectation is its expectedProfit minus carry.</p></div>
       <div><h3>The two rates</h3><p>The studio's share is 10% of gross gaming revenue. The expectation uses 7.5% of turnover times the house edge. The share rate shown is derived from position when there is enough money to trust it, and snaps to 10% or 7.5% when within half a point.</p></div>
       <div><h3>The luck gap</h3><p>Position against the balance endpoint's own expectation. Negative means players are ahead of the math so far this month; at this studio's volume a gap of thousands can be ordinary variance.</p></div>

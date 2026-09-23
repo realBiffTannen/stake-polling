@@ -1,6 +1,6 @@
 {
   "name": "stake-polling",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "description": "Minute-resolution Engine accounting poller into Redis, with a live terminal dashboard and anomaly detection.",
@@ -16,20 +16,29 @@
   "bin": {
     "stake-poller": "./bin/stake-poller.mjs",
     "stake-dash": "./bin/stake-dash.mjs",
-    "stake-web": "./bin/stake-web.mjs"
+    "stake-web": "./bin/stake-web.mjs",
+    "stake-archive": "./bin/stake-archive.mjs"
   },
   "scripts": {
     "start": "node bin/stake-up.mjs",
     "poll": "node bin/stake-poller.mjs",
     "dash": "node bin/stake-dash.mjs",
     "web": "node bin/stake-web.mjs",
+    "archive": "node bin/stake-archive.mjs",
     "service:install": "node scripts/service.mjs install",
     "service:uninstall": "node scripts/service.mjs uninstall",
     "service:status": "node scripts/service.mjs status",
     "enable-persistence": "node scripts/enable-persistence.mjs",
+    "auth": "node scripts/auth.mjs",
+    "demo:build": "node scripts/demo-build.mjs",
+    "demo:deploy": "node scripts/demo-deploy.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "redis": "^5.0.0"
+    "@aws-sdk/client-s3": "^3.1138.0",
+    "@aws-sdk/s3-request-presigner": "^3.1138.0",
+    "echarts": "^6.1.0",
+    "redis": "^5.0.0",
+    "smoothie": "^1.36.1"
   }
 }

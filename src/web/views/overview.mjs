@@ -7,10 +7,15 @@
 import { html } from '../html.mjs';
 import { usd, usdSigned, int, intSigned, pct, utcHm, money, blank, DASH } from '../format.mjs';
 import { sparkline } from '../svg.mjs';
-import { tiles, dataTable, findingsList, eventsList, actionLog } from './parts.mjs';
+import { tiles, dataTable, findingsList, eventsList, actionLog, chartPanel } from './parts.mjs';
 import { dayTotals, rosterTotals } from '../../tui/state.mjs';
 import { msToNextBoundary, periodMs } from '../../poll/schedule.mjs';
 import { fill } from '../fills.mjs';
+import { liveStream } from '../../insights/series.mjs';
+import { interactiveChart, emptyChart, liveData, latestReading, ACCENTS } from '../charts/interactive.mjs';
+
+/** How far back the live strips reach: hours of polls, not a day of them. */
+export const LIVE_HOURS = 3;
 
 export const SORTS = ['turnover', 'lifetimeTurnover', 'dTurnover', 'profit', 'count', 'name'];
 
@@ -74,6 +79,7 @@ export function renderOverview(state, { sort = 'turnover', panes = true } = {}) 
   <p class="dim">sort: ${SORTS.map((s) => html`<a href="?sort=${s}">${s === key ? html`<b>${s}</b>` : s}</a> `)}
     - <a href="?panes=${panes ? '0' : '1'}">${panes ? 'hide' : 'show'} panes</a></p>
 </section>
+${livePanel(state)}
 ${panes ? html`
 <section class="panel"><h2>possible events</h2>
   <p class="dim">hypotheses, not conclusions - the findings they were built from are below</p>
@@ -81,6 +87,29 @@ ${panes ? html`
 <section class="panel"><h2>running action (${state.summaryMinutes ?? state.pollMinutes} min)</h2>
   ${actionLog(state.summaries, state.money)}</section>
 <section class="panel"><h2>findings</h2>${findingsList(state.alerts)}</section>` : null}`;
+}
+
+/**
+ * Players online and bets, poll by poll, as two strips that scroll with the
+ * clock. The figures only move when the collector polls, so the strips say
+ * "per poll" and take each new poll as the live refresh brings it; two
+ * measures, so two strips, never one axis.
+ */
+function livePanel(state) {
+  const now = Number(state.now) || Date.now();
+  const slotMs = periodMs(state.pollMinutes);
+  const stream = liveStream({ online: state.onlineTrail ?? [], games: state.gameTrails ?? {}, now, hours: LIVE_HOURS, slotMs });
+  const strip = ({ id, points, label, title, colour, empty }) => html`<div class="live-strip">
+    <div class="live-head"><span>${label}<em>per poll</em></span><b>${latestReading(points) ?? DASH}</b></div>
+    ${points.some((p) => p.value !== null)
+      ? interactiveChart({ id, kind: 'live', title, data: liveData(points, { label, colour, slotMs, hours: LIVE_HOURS }), note: 'The scrolling strip needs JavaScript.' })
+      : emptyChart(empty)}</div>`;
+  return chartPanel('Live stream', stream.headline, html`<div class="live-strips">
+    ${strip({ id: 'live-online', points: stream.online, label: 'Players online', colour: ACCENTS.online,
+      title: `Players online at each poll, last ${LIVE_HOURS} hours`, empty: `No poll has read players online in the last ${LIVE_HOURS} hours.` })}
+    ${strip({ id: 'live-bets', points: stream.bets, label: 'Bets', colour: ACCENTS.turnover,
+      title: `Bets in each poll interval, last ${LIVE_HOURS} hours`, empty: `No two polls in a row have counted bets in the last ${LIVE_HOURS} hours.` })}</div>`,
+    `One point per poll, ${cadenceWords(state)}, over the last ${LIVE_HOURS} hours. Bets are each interval's change in every game's count, summed. A missed poll breaks the line.`);
 }
 
 /**

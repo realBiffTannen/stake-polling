@@ -1,8 +1,9 @@
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { pipeline } from 'node:stream/promises';
 import { gzipSync } from 'node:zlib';
 import { html } from './html.mjs';
-import { renderInsights, insightsCsv } from './views/insights.mjs';
+import { renderInsights, insightsCsv, insightsPdf } from './views/insights.mjs';
 import { shell, documentFor, polledText } from './views/shell.mjs';
 import { STATIC } from './static.mjs';
 import { createPageCache } from './page-cache.mjs';
@@ -14,7 +15,7 @@ import { renderLog } from './views/log.mjs';
 import { renderSettlement } from './views/settlement.mjs';
 import { settlement, dataHealth } from '../insights/settlement.mjs';
 import { listOf } from '../games.mjs';
-import { spanOf } from '../insights/span.mjs';
+import { spanOf, SPANS, GAME_SPANS } from '../insights/span.mjs';
 import { dayBounds } from '../store/export.mjs';
 import { renderGamePage } from './views/game.mjs';
 import { renderModePage } from './views/mode.mjs';
@@ -22,11 +23,24 @@ import { renderBucketsPage } from './views/buckets.mjs';
 import { renderTrends } from './views/trends.mjs';
 import { renderMath } from './views/math.mjs';
 import { renderDonate } from './views/donate.mjs';
+import { renderArchive } from './views/archive.mjs';
+import { renderLogin } from './views/login.mjs';
+import { renderSettings } from './views/settings.mjs';
+import { viewerMenu, pollBarHtml } from './views/shell.mjs';
+import { parseCookies, cookie, isSecure, newCsrf, csrfOk, readForm, safeNext, SESSION_COOKIE, CSRF_COOKIE } from './http-auth.mjs';
+import { VERSION } from '../version.mjs';
 import { gameModel } from '../math/checks.mjs';
+
+// The only routes that take a POST: every other route is read-only.
+const POST_ROUTES = new Set(['/login', '/logout', '/settings/auth', '/dismiss']);
+const DISMISS_KEY = /^[a-z][a-z-]{0,40}:[0-9a-f]{12}$/;
 
 const HEADERS = {
   'content-security-policy': "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-  'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
+  // same-origin, not no-referrer: under no-referrer a browser sends "Origin: null"
+  // on a form POST, and the CSRF check (http-auth.mjs) refuses a null origin.
+  // Nothing is sent to other sites either way.
+  'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'cache-control': 'no-store',
 };
 
 /**
@@ -81,6 +95,16 @@ function historyFor(url) {
   return modesFor(url) === 'all' ? null : modesFor(url);
 }
 
+/**
+ * How many hours of trail `read()` must fetch by time, apart from the shared
+ * 24-hour trail: only an analysis span longer than that asks for more.
+ */
+function trailHoursFor(url) {
+  if (url.pathname !== '/analysis') return null;
+  const hours = SPANS[spanOf(url.searchParams.get('span'))].hours ?? 0;
+  return hours > 24 ? hours : null;
+}
+
 // Player insights lived at the root until the overview took it. A bookmark or
 // an open tab carrying its filters still lands on it, filters intact.
 const INSIGHTS_PARAMS = ['game', 'from', 'to', 'days', 'sort', 'dir'];
@@ -102,7 +126,7 @@ const COMPRESSIBLE = /^(text\/|application\/json|image\/svg\+xml)/;
  * poll - are fills, recomputed on every serve (see fills.mjs). `warm(paths)`
  * renders pages into the cache ahead of the first visitor after a tick.
  */
-export function createWebServer({ read, log = null, exporter = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
+export function createWebServer({ read, log = null, exporter = null, archive = null, auth = null, dismissals = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
   const pages = createPageCache({ max: 200, ttlMs: pageTtlMs, now });
 
   // Everything behind the static files: one rendered response, never touched
@@ -111,12 +135,13 @@ export function createWebServer({ read, log = null, exporter = null, version = (
     const page = (body, title, state) => ({ status: 200, type: 'text/html; charset=utf-8',
       body: String(url.searchParams.get('fragment') === '1' ? body : documentFor({ body, title, team: state?.meta?.team ?? null })), state });
     const text = (status, message, extra = {}) => ({ status, type: 'text/plain', body: message, headers: extra });
-    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/export.csv', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
+    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/archive', '/export.csv', '/export.pdf', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
     if (url.pathname === '/log' && !log) return text(404, 'Page not found');
+    if (url.pathname === '/archive' && !archive) return text(404, 'Page not found');
     if (url.pathname === '/' && INSIGHTS_PARAMS.some(p => url.searchParams.has(p))) return text(302, '', { location: `/insights?${url.searchParams}` });
     try {
-      const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: url.pathname === '/settlement' ? 2 : null, history: historyFor(url) });
-      if (url.pathname === '/healthz') return { status: 200, type: 'application/json', body: JSON.stringify({ ok: true, collectorStale: !!state.stale, dailySyncError: model.snapshot.error ?? null }) };
+      const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: url.pathname === '/settlement' ? 2 : null, history: historyFor(url), trailHours: trailHoursFor(url) });
+      if (url.pathname === '/healthz') return { status: 200, type: 'application/json', body: JSON.stringify({ ok: true, version: VERSION, collectorStale: !!state.stale, dailySyncError: model.snapshot.error ?? null }) };
       if (url.pathname.startsWith('/game/')) {
         let parts;
         try { parts = url.pathname.slice(6).split('/').map(decodeURIComponent); } catch { return text(404, 'Unknown game'); }
@@ -133,7 +158,7 @@ export function createWebServer({ read, log = null, exporter = null, version = (
         const math = gameModel(state.math, slug);
         const modeRows = Array.isArray(state.modeRows?.[slug]) ? state.modeRows[slug] : [];
         const modeDays = state.modeDays?.[slug] ?? {};
-        if (section === undefined) return page(renderGamePage({ slug, model, state, math, modeRows, modeDays, span: spanOf(url.searchParams.get('span')), online: url.searchParams.get('online') }), slug, state);
+        if (section === undefined) return page(renderGamePage({ slug, model, state, math, modeRows, modeDays, span: spanOf(url.searchParams.get('span'), GAME_SPANS), online: url.searchParams.get('online') }), slug, state);
         if (section === 'mode' && mode) return page(renderModePage({ slug, mode, model, state, math, modeRows, modeDays }), `${slug} ${mode}`, state);
         if (section === 'buckets' && !mode) {
           const gameTrail = state.gameTrails?.[slug] ?? [];
@@ -146,6 +171,10 @@ export function createWebServer({ read, log = null, exporter = null, version = (
       if (url.pathname === '/donate') return page(renderDonate({ state }), 'Donations', state);
       if (url.pathname === '/math') return page(renderMath({ model, state, math: state.math ?? {}, live: state.liveSlugs ?? [] }), 'Game math', state);
       if (url.pathname === '/export.csv') return { status: 200, type: 'text/csv; charset=utf-8', body: insightsCsv(model), headers: { 'content-disposition': 'attachment; filename="player-insights.csv"' } };
+      if (url.pathname === '/export.pdf') {
+        const name = `player-insights-${model.from}-to-${model.to}.pdf`.replace(/[^\w.-]/g, '_');
+        return { status: 200, type: 'application/pdf', body: insightsPdf(model, { team: state?.meta?.team ?? null, now: now() }), headers: { 'content-disposition': `attachment; filename="${name}"` } };
+      }
       if (url.pathname === '/analysis') return page(renderAnalysis({ state, model, span: spanOf(url.searchParams.get('span')) }), 'Analysis', state);
       if (url.pathname === '/settlement') {
         // Reconciles one upstream endpoint against another, so it reads the
@@ -164,6 +193,13 @@ export function createWebServer({ read, log = null, exporter = null, version = (
         query.delete('fragment');
         const { page: entries, sources, source } = await log(query);
         return page(renderLog({ state, page: entries, sources, source, total: entries.total }), 'Poll log', state);
+      }
+      if (url.pathname === '/archive') {
+        // A store that cannot be listed (S3 unreachable, credentials wrong)
+        // is said on the page, not turned into a 503 for the whole page.
+        let listing;
+        try { listing = await archive.list(); } catch (err) { listing = { ...(archive.describe?.() ?? {}), files: [], error: String(err?.message ?? err) }; }
+        return page(renderArchive({ state, listing }), 'Archive', state);
       }
       if (url.pathname === '/') return page(renderHome(state), 'Overview', state);
       if (url.pathname === '/live') {
@@ -189,9 +225,12 @@ export function createWebServer({ read, log = null, exporter = null, version = (
   }
 
   // The request-time values, as of this serve.
-  const fillsFor = (entry) => ({
+  const fillsFor = (entry, viewer) => ({
     age: () => polledText(entry.lastOk ? Math.max(0, now() - entry.lastOk) : null),
     countdown: () => countdownHtml(now(), entry.pollMinutes),
+    pollbar: () => pollBarHtml(now(), entry.pollMinutes),
+    viewer: () => viewerMenu(viewer),
+    'csrf-input': () => String(html`<input type="hidden" name="csrf" value="${viewer?.csrf ?? ''}">`),
   });
 
   const server = createServer(async (req, res) => {
@@ -207,9 +246,12 @@ export function createWebServer({ read, log = null, exporter = null, version = (
       res.writeHead(status, headers);
       res.end(req.method === 'HEAD' ? '' : payload);
     };
-    if (!['GET', 'HEAD'].includes(req.method)) return send(405, 'Method not allowed', 'text/plain', { allow: 'GET, HEAD' });
     let url;
     try { url = new URL(req.url, 'http://localhost'); } catch { return send(400, 'Invalid URL', 'text/plain'); }
+    const postable = POST_ROUTES.has(url.pathname);
+    if (!(['GET', 'HEAD'].includes(req.method) || (req.method === 'POST' && postable))) {
+      return send(405, 'Method not allowed', 'text/plain', { allow: postable ? 'GET, HEAD, POST' : 'GET, HEAD' });
+    }
     const file = STATIC[url.pathname];
     if (file) {
       // A day under its content-hash URL, then revalidated by ETag.
@@ -222,6 +264,127 @@ export function createWebServer({ read, log = null, exporter = null, version = (
       return res.end(req.method === 'HEAD' ? '' : zipped ? file.gzip : file.body);
     }
     if (url.pathname === '/favicon.ico') return send(204, '', 'image/x-icon');
+
+    // ---- sign-in. Everything below this needs a session while sign-in is on,
+    // except /healthz (for monitors) and the sign-in page itself.
+    const cookies = parseCookies(req.headers.cookie);
+    const secure = isSecure(req);
+    const setCookies = [];
+    let csrf = cookies[CSRF_COOKIE];
+    if (!csrf || csrf.length < 16 || csrf.length > 100) {
+      csrf = newCsrf();
+      setCookies.push(cookie(CSRF_COOKIE, csrf, { secure }));
+    }
+    const withCookies = (extra = {}, more = []) => (setCookies.length || more.length ? { ...extra, 'set-cookie': [...setCookies, ...more] } : extra);
+    const redirect = (location, more = []) => { res.writeHead(303, { ...HEADERS, location, ...withCookies({}, more) }); res.end(); };
+    let viewer = { enabled: false, csrf };
+    if (auth) {
+      try {
+        const status = await auth.status();
+        const user = status.enabled ? await auth.sessionUser(cookies[SESSION_COOKIE]) : null;
+        viewer = { enabled: status.enabled, username: user ?? status.username, user, csrf };
+      } catch {
+        // Unknown is not "off": with Redis unreadable, fail closed.
+        return send(503, 'The sign-in check is unavailable. Check Redis, then reload.', 'text/plain');
+      }
+    }
+    const ip = req.socket.remoteAddress ?? '?';
+    const sessionCookie = (result) => cookie(SESSION_COOKIE, result.token, { maxAge: result.maxAge, secure });
+    const clearSession = cookie(SESSION_COOKIE, '', { maxAge: 0, secure });
+
+    if (req.method === 'POST') {
+      const form = await readForm(req).catch(() => null);
+      if (!form) return send(400, 'Send the form as application/x-www-form-urlencoded, under 16 KB.', 'text/plain');
+      const valid = csrfOk(req, cookies, form);
+      if (url.pathname === '/login') {
+        const next = safeNext(form.get('next'));
+        if (!auth || !viewer.enabled) return redirect('/');
+        if (!valid) return redirect(`/login?error=csrf&next=${encodeURIComponent(next)}`);
+        const result = await auth.login({ username: form.get('username') ?? '', password: form.get('password') ?? '', keep: form.get('keep') === '1', ip });
+        if (result.error) return redirect(`/login?error=${result.error}&next=${encodeURIComponent(next)}`);
+        return redirect(next, [sessionCookie(result)]);
+      }
+      if (url.pathname === '/dismiss') {
+        // A standing warning dismissed for everyone (views/parts.mjs), or
+        // every dismissed warning shown again (restore=all, from Settings).
+        const wantsJson = /application\/json/.test(req.headers.accept ?? '');
+        if (!dismissals) return send(404, 'Page not found', 'text/plain');
+        if (viewer.enabled && !viewer.user) return send(401, 'Sign in required.', 'text/plain');
+        if (!valid) return send(403, 'The form expired. Reload the page and try again.', 'text/plain');
+        const key = String(form.get('key') ?? '');
+        if (form.get('restore') === 'all') await dismissals.clear();
+        else if (DISMISS_KEY.test(key)) await dismissals.add(key);
+        else return send(400, 'Unknown warning.', 'text/plain');
+        pages.clear();
+        if (wantsJson) { res.writeHead(204, HEADERS); return res.end(); }
+        return redirect(safeNext(form.get('back')));
+      }
+      if (url.pathname === '/logout') {
+        if (!valid) return send(403, 'The form expired. Reload the page and try again.', 'text/plain');
+        if (auth) await auth.logout(cookies[SESSION_COOKIE]);
+        return redirect(viewer.enabled ? '/login' : '/', [clearSession]);
+      }
+      // /settings/auth
+      const action = String(form.get('action') ?? '');
+      const back = (params) => `/settings?${new URLSearchParams({ tab: 'security', ...params })}`;
+      if (!auth) return send(404, 'Page not found', 'text/plain');
+      if (!valid) return redirect(back({ error: 'csrf', form: action }));
+      if (action !== 'enable' && !viewer.user) return viewer.enabled ? redirect('/login?next=%2Fsettings') : redirect(back({ error: 'not-on', form: action }));
+      const current = form.get('current') ?? '';
+      let result;
+      if (action === 'enable') result = await auth.enable({ username: form.get('username') ?? '', password: form.get('password') ?? '', confirm: form.get('confirm') ?? '' });
+      else if (action === 'change') result = await auth.change({ current, username: form.get('username') ?? '', password: form.get('password') ?? '', confirm: form.get('confirm') ?? '', ip });
+      else if (action === 'signout-all') result = await auth.signOutEverywhere({ current, ip });
+      else if (action === 'disable') result = await auth.disable({ current, ip });
+      else return send(400, 'Unknown settings action.', 'text/plain');
+      if (result.error) return redirect(back({ error: result.error, form: action }));
+      if (action === 'enable') return redirect(back({ ok: 'enabled' }), [sessionCookie(result)]);
+      if (action === 'change') return redirect(back({ ok: 'changed' }), [sessionCookie(result)]);
+      if (action === 'signout-all') return redirect('/login?next=%2Fsettings', [clearSession]);
+      return redirect(back({ ok: 'disabled' }), [clearSession]);
+    }
+
+    if (url.pathname === '/login') {
+      if (!viewer.enabled) return redirect('/');
+      if (viewer.user) return redirect(safeNext(url.searchParams.get('next')));
+      const page = documentFor({ body: renderLogin({ error: url.searchParams.get('error'), next: safeNext(url.searchParams.get('next')), csrf }), title: 'Sign in' });
+      return send(200, page, 'text/html; charset=utf-8', withCookies());
+    }
+    if (viewer.enabled && !viewer.user && url.pathname !== '/healthz') {
+      // A page load goes to the sign-in page and comes back after; anything
+      // else (a live-refresh fragment, a CSV, an archive file) is just refused.
+      const pageLoad = req.method === 'GET' && url.searchParams.get('fragment') !== '1' && !url.pathname.startsWith('/export') && !url.pathname.startsWith('/archive/file/');
+      if (pageLoad) return redirect(`/login?next=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
+      return send(401, 'Sign in required.', 'text/plain', withCookies());
+    }
+    if (url.pathname === '/settings') {
+      if (!auth) return send(404, 'Page not found', 'text/plain');
+      try {
+        const { state } = await read(queryFor(url), {});
+        const flash = { ok: url.searchParams.get('ok'), error: url.searchParams.get('error'), form: url.searchParams.get('form') };
+        const body = renderSettings({ state, tab: url.searchParams.get('tab'), auth: { enabled: viewer.enabled, username: viewer.username }, csrf, flash,
+          confirm: url.searchParams.get('confirm'), archive: archive?.describe?.() ?? null, version: VERSION });
+        const doc = url.searchParams.get('fragment') === '1' ? String(body) : documentFor({ body, title: 'Settings', team: state?.meta?.team ?? null });
+        return send(200, refill(doc, fillsFor({ lastOk: state.lastOk, pollMinutes: state.pollMinutes }, viewer)), 'text/html; charset=utf-8', withCookies());
+      } catch {
+        return send(503, 'Settings are unavailable. Check Redis, then reload.', 'text/plain');
+      }
+    }
+    if (url.pathname.startsWith('/archive/file/')) {
+      // The local store's files. An S3 store answers null here - its links go
+      // straight to S3, presigned - and so does any name that is not exactly
+      // an archive's, so nothing outside the archive directory is reachable.
+      let name;
+      try { name = decodeURIComponent(url.pathname.slice('/archive/file/'.length)); } catch { return send(404, 'Not found', 'text/plain'); }
+      let file = null;
+      try { file = archive ? await archive.open(name) : null; } catch { file = null; }
+      if (!file) return send(404, 'Not found', 'text/plain');
+      res.writeHead(200, { ...HEADERS, 'content-type': 'application/gzip', 'content-length': String(file.size),
+        'content-disposition': `attachment; filename="${name}"` });
+      if (req.method === 'HEAD') { file.stream.destroy(); return res.end(); }
+      try { await pipeline(file.stream, res); } catch { res.destroy(); }
+      return;
+    }
     if (url.pathname === '/export/log.csv') {
       // Raw poll-log CSV, streamed chunk by chunk straight out of Redis: a
       // whole day of every stream is a few hundred thousand rows, and holding
@@ -241,8 +404,10 @@ export function createWebServer({ read, log = null, exporter = null, version = (
       return res.end();
     }
     const out = cacheable(url.pathname) ? await pageFor(url) : await route(url);
-    const body = out.status === 200 && out.type?.startsWith('text/html') && 'lastOk' in out ? refill(out.body, fillsFor(out)) : refill(out.body);
-    return send(out.status, body, out.type, out.headers ?? {});
+    const isPage = out.status === 200 && out.type?.startsWith('text/html');
+    const entry = 'lastOk' in out ? out : { lastOk: out.state?.lastOk ?? null, pollMinutes: out.state?.pollMinutes };
+    const body = isPage ? refill(out.body, fillsFor(entry, viewer)) : refill(out.body);
+    return send(out.status, body, out.type, isPage ? withCookies(out.headers ?? {}) : out.headers ?? {});
   });
 
   /** Render `paths` into the page cache, one after another; failures are skipped. */

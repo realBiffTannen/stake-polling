@@ -20,13 +20,14 @@ per-mode stats and balance.
 >
 > Thank you.
 
-<img width="1511" height="833" alt="Screenshot 2026-09-22 at 5 38 55 PM" src="https://github.com/user-attachments/assets/460ad7d7-2c8c-4d3b-887b-079c64d1fc41" />
-<img width="1512" height="711" alt="Screenshot 2026-09-22 at 5 39 06 PM" src="https://github.com/user-attachments/assets/449136b2-1867-4f3a-9520-6174c1a9344b" />
-<img width="1499" height="652" alt="Screenshot 2026-09-22 at 5 39 51 PM" src="https://github.com/user-attachments/assets/a73d1a1a-2782-4e58-9f07-726d8128e769" />
-<img width="1482" height="620" alt="Screenshot 2026-09-22 at 5 40 01 PM" src="https://github.com/user-attachments/assets/cf9c0dc0-17c4-4613-91f5-8b6a2f09a771" />
+**[Try the live demo](http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/)** - a click-through copy of the dashboard, running on made-up data for twenty fictional games (see [The demo site](#the-demo-site)). **[Read the documentation](https://realbifftannen.github.io/stake-polling/)** for setup and every feature.
 
+<a href="docs/screenshots/overview.png"><img src="docs/screenshots/overview.png" width="49%" alt="Overview: every game this month, one line each"></a> <a href="docs/screenshots/analysis.png"><img src="docs/screenshots/analysis.png" width="49%" alt="Analysis: donuts, P/L by game and the span picker"></a>
+<a href="docs/screenshots/players.png"><img src="docs/screenshots/players.png" width="49%" alt="Players online against turnover, one dot per poll"></a> <a href="docs/screenshots/trends.png"><img src="docs/screenshots/trends.png" width="49%" alt="Trends: players online every poll"></a>
 
-Three processes, joined only by Redis:
+*Screenshots are from the demo: every game and figure in them is made up.*
+
+Four processes, joined only by Redis:
 
 ```
 bin/stake-poller.mjs ──every 2.5 min──> studio.engine.io/api
@@ -35,13 +36,15 @@ bin/stake-poller.mjs ──every 2.5 min──> studio.engine.io/api
           v
     redis://127.0.0.1:6379
           │
-          ├──> bin/stake-web.mjs    web dashboard (http://<host>:3005)
-          └──> bin/stake-dash.mjs   live terminal dashboard
+          ├──> bin/stake-web.mjs      web dashboard (http://<host>:3005)
+          ├──> bin/stake-dash.mjs     live terminal dashboard
+          └──> bin/stake-archive.mjs  nightly archive, 00:00:00Z ──> S3 or ./stake-polling-logrotate-data
 ```
 
-The dashboards only read. Close them, restart them, run two of them - the trail is
-unaffected. Only the poller writes, and it holds a lock so a second copy cannot
-start and double every delta. `npm start` runs the poller and the web dashboard together.
+The dashboards and the archiver only read the trail. Close them, restart them, run two of
+them - the trail is unaffected. Only the poller writes it, and it holds a lock so a second
+copy cannot start and double every delta. `npm start` runs the poller, the web dashboard and
+the archiver together.
 
 ## Use it for your own studio
 
@@ -51,7 +54,7 @@ start and double every delta. `npm start` runs the poller and the web dashboard 
 |---|---|---|
 | An **Engine studio account** with access to the team you want to watch | Every endpoint is authenticated with your session's `sid` cookie, and scoped to one team | You can open `https://studio.engine.io/teams/<your-team-slug>` in a browser |
 | Your **team slug** | Names the team to poll, and namespaces its Redis keys | The `<slug>` in `studio.engine.io/teams/<slug>/...` |
-| **Node.js 22 or newer**, with npm | Runtime (the only npm dependency is the `redis` client) | `node --version`. macOS: `brew install node`. Linux: [nodejs.org](https://nodejs.org) or your package manager |
+| **Node.js 22 or newer**, with npm | Runtime (npm dependencies: the `redis` client, and the AWS S3 SDK, loaded only when `S3_BUCKET` is set) | `node --version`. macOS: `brew install node`. Linux: [nodejs.org](https://nodejs.org) or your package manager |
 | **Redis 5.0 or newer** | Storage: the trail is kept in Redis streams | `redis-cli ping` answers `PONG`. macOS: `brew install redis`. Debian/Ubuntu: `sudo apt install redis-server` |
 | **git** | To clone and update | `git --version` |
 | *Optional:* **macOS + Google Chrome**, logged in to `studio.engine.io` | Automatic sid recovery reads Chrome's cookie store through the Keychain, and `npm run service:*` installs a launchd agent | Everything else works on Linux too: supply the sid through `.sid` or `STAKE_SID`, and run it under systemd (below) |
@@ -207,11 +210,45 @@ running elsewhere, this one follows it rather than starting a second: the
 existing poller keeps its lock and is never signalled.
 
 The dashboard binds every interface, so other machines on the network can
-open the printed URL. **It is unauthenticated** - anyone who can reach the
-port can read turnover, profit, player counts, per-mode math and the game
-catalogue, including unreleased titles. To keep it on this machine only:
+open the printed URL. **It is open until you turn sign-in on** (Settings >
+Security; see *Signing in*) - until then anyone who can reach the port can
+read turnover, profit, player counts, per-mode math and the game catalogue,
+including unreleased titles. To keep it on this machine only:
 
     npm start -- --host 127.0.0.1
+
+## Signing in
+
+The dashboard is open to anyone who can reach it until you turn sign-in on:
+**Settings > Security > Require sign-in**. Choose a username and a password
+of at least 10 characters. The browser you do it from stays signed in.
+
+From then on, every page, live refresh, CSV and PDF export and archive
+download needs a session. `/healthz` and the page's own stylesheet and
+script do not, so monitors keep working and the sign-in page can load.
+Settings is also where you change the username or password (this signs every
+other browser out), sign out everywhere, or turn sign-in off again. Each of
+those asks for the current password.
+
+How it is kept safe:
+- **Passwords:** only a salted scrypt hash of the password is stored, in Redis.
+- **Sessions:** random tokens in `HttpOnly`, `SameSite=Strict` cookies. Redis holds only each token's SHA-256, with an expiry: 12 hours, or 30 days with *Keep me signed in*.
+- **Forms:** every form, including the one that turns sign-in on, carries a CSRF token and is refused from another origin. So another website cannot turn sign-in on with its own password and lock you out.
+- **Guessing:** sign-in attempts are rate-limited per address (5 wrong in 15 minutes), and an unknown username takes as long to reject as a wrong password.
+- **Redis down:** if the sign-in check cannot read Redis, the dashboard refuses rather than opening up.
+
+**Forgot the password?** On the machine running the dashboard:
+
+```bash
+npm run auth -- status     # is sign-in on, and for whom
+npm run auth -- disable    # turn it off and end every session
+```
+
+**Plain HTTP:** the dashboard serves HTTP, so on your network the password
+crosses the wire unencrypted. On a network you do not trust, bind it to this
+machine (`npm start -- --host 127.0.0.1`) and reach it over an SSH tunnel, or
+put it behind a reverse proxy that serves HTTPS. Behind a proxy that sets
+`X-Forwarded-Proto: https`, the session cookie is also marked `Secure`.
 
 ## Always on, across reboots
 
@@ -277,7 +314,7 @@ DevTools → Application → Cookies → `sid`, and either paste it at the promp
 write it to `.sid`.
 
 **When it expires mid-run,** the poller pauses rather than writing fiction into
-the trail. It then tries to recover on its own, once a minute:
+the trail. It then tries to recover on its own, once every poll:
 
 - if `.sid` has changed, it validates the new value and resumes;
 - otherwise it re-reads the Chrome cookie store, at most once every ten minutes.
@@ -298,12 +335,15 @@ error message.** Only `sha256(sid)[0:8]` is recorded, which is enough to tell
 
 ## What is polled
 
+Each endpoint's interval is `intervals` in `config.json`, in minutes, rounded
+to whole polls - so at the shipped 2.5-minute poll, "1 min" means every poll.
+
 | Endpoint | Every | What it gives |
 |---|---|---|
-| `/teams/{team}/stats` | 5 min | the roster — an **array** of `{ name, slug, stats: { count, turnover, profit, expectedProfit, unique } }` |
-| `/teams/{team}/games` | 5 min | the whole catalogue (every title, not just the roster's live ones), with `onlinePlayers` and `stats.month` / `stats.day` **per game** |
-| `/teams/{team}/games/{slug}/stats` | 5 min | per-mode breakdown under `stats` — BASE, BONUS_BOOST, FREE_SPINS and so on, with cost, rtp, effectiveRtp |
-| `/teams/{team}/balance` | 5 min | `{ position, expectedProfit, carry }` — the balance is **not** in the roster response |
+| `/teams/{team}/stats` | every poll | the roster — an **array** of `{ name, slug, stats: { count, turnover, profit, expectedProfit, unique } }` |
+| `/teams/{team}/games` | every poll | the whole catalogue (every title, not just the roster's live ones), with `onlinePlayers` and `stats.month` / `stats.day` **per game** |
+| `/teams/{team}/games/{slug}/stats` | every poll | per-mode breakdown under `stats` — BASE, BONUS_BOOST, FREE_SPINS and so on, with cost, rtp, effectiveRtp |
+| `/teams/{team}/balance` | every poll | `{ position, expectedProfit, carry }` — the balance is **not** in the roster response |
 | `/teams/{team}/graph` | 15 min | `{ profit: [], turnover: [], count: [] }` — parallel arrays, one entry per day |
 | `/teams/{team}/stats?start=&end=` | 60 min | the same roster over the lifetime window (from `lifetimeStart`) |
 
@@ -401,14 +441,21 @@ Namespace `stake:<team>:`.
 | `balance:latest` | string | `{ position, expectedProfit, carry }` |
 | `alerts` | stream | every raised anomaly |
 | `meta` | hash | `last_ok`, `auth_state`, `consecutive_failures`, `sid_fingerprint`, … |
-| `lock:poller` | string | single-instance lock, `SET NX EX 90` |
+| `lock:poller` | string | single-instance lock, `SET NX EX` three polls (at least 90 s; 450 s at the shipped 2.5-minute poll) |
+| `lock:archive` | string | held by the archiver for the length of one run, so two archivers never upload the same day |
+| `archive:status` | string | the archiver's last run: when, where to, which days were stored or failed and why |
+| `auth` | string | sign-in credentials: the username and a salted scrypt hash, never the password - absent while sign-in is off |
+| `auth:epoch` | string | a counter that versions the credentials; moving it ends every session |
+| `session:{sha256}` | string | one per signed-in browser, named by its token's hash, with an expiry |
+| `dismissed` | set | standing warnings dismissed for everyone |
 
 Channels `tick` and `alerts:ch` are published after each tick so the dashboard
 repaints immediately instead of waiting for its next heartbeat.
 
 Every snapshot carries its own fetch timestamp, so a failed endpoint leaves the
 previous value in place and you can still tell how old it is. Trails are capped
-at 8640 entries — 30 days at one sample every five minutes.
+at `retention.trailDays` (30) days of polls - 17,280 entries at the shipped
+2.5-minute poll.
 
 Values from the API are month-to-date **cumulative** totals. They are stored as
 reported; the rate is derived when it is needed.
@@ -471,6 +518,203 @@ database on that server, so it is opt-in:
 npm run enable-persistence
 ```
 
+### Authenticated Redis
+
+No credentials by default - a local Redis on a trusted machine. For a server
+that requires them, put them in `.env` at the repo root (gitignored; start from
+`.env.example`):
+
+```bash
+REDIS_USERNAME=stake-polling   # an ACL user; leave unset for plain requirepass
+REDIS_PASSWORD=...
+REDIS_URL=rediss://redis.internal:6380/0   # rediss:// for TLS
+```
+
+`user:password@` inside `REDIS_URL` works too; `REDIS_USERNAME`/`REDIS_PASSWORD`
+win over it when both are set. Every process - poller, both dashboards, the
+archiver, `enable-persistence` - connects the same way, and any URL they print
+has its password masked. Credentials are read from the environment and never
+carried on the config object, so they cannot end up in a log along with it.
+
+### Memory alert
+
+Every screen carries a sticky red alert while Redis's `used_memory` - what
+`redis-cli INFO memory | grep used_memory_human` prints - is over 2GB:
+
+```
+REDIS MEMORY 2.20G - over the 2.00G limit (REDIS_DB_SIZE). Shorten retention.trailDays, or raise the limit if the machine has room.
+```
+
+On the web dashboard it stays pinned to the top however far the page scrolls;
+in the terminal dashboard it is in the header. It is read once per poll tick,
+alongside the rest of the frame, and clears on its own once memory drops back
+under the limit. A reading that cannot be taken (INFO denied by an ACL, say)
+shows no alert rather than a reassuring zero.
+
+Set the limit with `REDIS_DB_SIZE` in `.env` or the environment: `512MB`,
+`1.5G`, `4GB` or a byte count. Units are binary, as Redis's own are, so `2GB`
+is exactly the `2.00G` redis-cli shows. An unreadable value stops startup
+with a message rather than silently falling back to the default.
+
+## Nightly archive
+
+Redis keeps 30 days of trail. The archiver keeps it for good: at every
+00:00:00Z it takes the UTC day that just ended - every stream the collector
+wrote, the same all-streams CSV the poll log's **Download CSV** gives you -
+gzips it to `stake-all-YYYY-MM-DD.csv.gz` and stores it:
+
+- **to S3**, under `s3://$S3_BUCKET/$S3_PREFIX/<team>/`, when `S3_BUCKET` is set;
+- **to `./stake-polling-logrotate-data/`** at the repo root otherwise.
+
+It runs as its own process (`bin/stake-archive.mjs`, started by `npm start`
+and the service), so nothing about an upload can hold up polling: a slow or
+failed upload happens in a different process, the poller never waits on it,
+and if the archiver crashes `npm start` logs it, keeps polling, and starts the
+archiver again a minute later. A failed run is retried every 15 minutes. On
+every start and every midnight it also catches up any of the last seven days
+the destination is missing - a laptop asleep at midnight loses nothing, as
+long as Redis still holds the day. A day Redis holds nothing for makes no file.
+
+The **Archive** page on the web dashboard lists every stored day, its size and
+when it was written, and the archiver's last run - including any failure. For
+S3 each file carries a presigned download URL (valid for `S3_PRESIGN_SECONDS`,
+an hour by default, and signed afresh on every page load). For the local
+directory each file links to itself on disk - its `file://` URL, with the full
+path beneath it to copy - and has a **Download** the dashboard serves. Most
+browsers will not follow a `file://` link out of a web page, and one opened on
+another machine points at that machine's disk, so the path (for Finder or a
+terminal) and **Download** (from anywhere) are the dependable routes.
+
+```bash
+npm run archive -- --once              # catch up now, then exit
+npm run archive -- --date 2026-09-22   # (re)archive one day now, then exit
+npm start -- --no-archive              # run without the archiver
+```
+
+### S3 persistence: prerequisites
+
+| You need | Why | Check / install |
+|---|---|---|
+| An **AWS account**, and credentials allowed to create S3 buckets and IAM users (an admin profile) | Only for the one-off setup script. The archiver itself runs with a separate least-privilege user | `aws sts get-caller-identity` answers with your ARN |
+| **Python 3.9+** and **boto3** | Runs `scripts/create-s3-bucket.py` | `python3 -c "import boto3"`. Install: `pip install boto3` (a virtualenv is fine) |
+| The **AWS CLI** *(optional)* | Handy for the checks below; the archiver does not use it | `aws --version`. macOS: `brew install awscli` |
+| **Outbound HTTPS** to `s3.<region>.amazonaws.com` from the machine running the archiver, and from any browser that downloads | Uploads, listing and presigned downloads | `curl -sI https://s3.amazonaws.com` |
+
+### S3 persistence: set up
+
+1. **Create the bucket and the archiver's user**, with your admin credentials
+   (`AWS_PROFILE=admin` or similar). Pick a globally unique bucket name:
+
+   ```bash
+   python3 scripts/create-s3-bucket.py --bucket acme-stake-archive --region us-east-1 \
+       --iam-user stake-polling-archiver --create-access-key --write-env .env
+   ```
+
+   `--dry-run` first prints exactly what it will do and every policy, without
+   calling AWS. It is idempotent - re-run it any time to bring the bucket back
+   into line. What it sets up:
+
+   - Block Public Access on (all four settings) and ACLs disabled (bucket owner
+     enforced), so nothing in the bucket can be made public;
+   - default encryption (SSE-S3, AES-256), and a bucket policy refusing any
+     request not made over TLS;
+   - versioning, so an overwritten archive can be recovered (old versions expire
+     after 30 days; `--no-versioning` to skip), and cleanup of abandoned uploads;
+   - optionally `--expire-days N` to delete archives after N days;
+   - with `--iam-user`, a user whose only permissions are `s3:PutObject` and
+     `s3:GetObject` under `<prefix>/` and `s3:ListBucket` restricted to that
+     prefix - no delete, no policy or ACL changes, nothing else in the bucket.
+     `GetObject` is what makes the presigned download links work, since a
+     presigned URL carries the signer's permissions.
+
+   `--write-env .env` sets `S3_BUCKET`, `S3_PREFIX`, `AWS_REGION` and the new
+   access key in `.env` (mode 600), keeping the secret out of your terminal
+   scrollback. Without it the lines are printed for you to copy. Prefer a
+   profile to a static key? Leave off `--create-access-key`, give the user
+   credentials your own way (SSO, a role), and set `AWS_PROFILE` in `.env`
+   instead - the archiver uses the standard AWS SDK credential chain.
+
+   **Without Python - the same setup by hand with the AWS CLI.** The two
+   policies are in `docs/s3/`: `archiver-policy.example.json` (the archiver's
+   IAM permissions) and `bucket-policy.example.json` (TLS only). With admin
+   credentials, replacing `acme-stake-archive` with your bucket name:
+
+   ```bash
+   B=acme-stake-archive REGION=us-east-1 USER=stake-polling-archiver
+   # bucket (outside us-east-1 add: --create-bucket-configuration LocationConstraint=$REGION)
+   aws s3api create-bucket --bucket $B --region $REGION --object-ownership BucketOwnerEnforced
+   aws s3api put-public-access-block --bucket $B --public-access-block-configuration \
+       BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+   aws s3api put-bucket-encryption --bucket $B --server-side-encryption-configuration \
+       '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+   aws s3api put-bucket-versioning --bucket $B --versioning-configuration Status=Enabled
+   sed "s/YOUR-BUCKET/$B/g" docs/s3/bucket-policy.example.json > /tmp/bucket-policy.json
+   aws s3api put-bucket-policy --bucket $B --policy file:///tmp/bucket-policy.json
+   # the archiver's user: upload, read and list under stake-polling/ - nothing else
+   aws iam create-user --user-name $USER
+   sed "s/YOUR-BUCKET/$B/g" docs/s3/archiver-policy.example.json > /tmp/archiver-policy.json
+   aws iam put-user-policy --user-name $USER --policy-name stake-polling-archive \
+       --policy-document file:///tmp/archiver-policy.json
+   aws iam create-access-key --user-name $USER   # put the two values in .env; the secret is shown once
+   ```
+
+   Then in `.env`: `S3_BUCKET`, `S3_PREFIX=stake-polling`, `AWS_REGION`,
+   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. If you change `S3_PREFIX`,
+   change `stake-polling` in the archiver policy to match.
+
+   **Never give the archiver your root or admin keys.** If `aws sts
+   get-caller-identity` answers with an ARN ending in `:root`, you are using
+   the account's root access key: fine for this one-off setup, but AWS's own
+   advice is to delete root access keys once you have an admin IAM user or SSO.
+
+2. **Restart** so the archiver and the dashboard pick up `.env`:
+   `npm run service:uninstall && npm run service:install`, or stop and re-run
+   `npm start`.
+
+### S3 persistence: verify it works
+
+1. **Archive yesterday now** rather than waiting for midnight:
+
+   ```bash
+   npm run archive -- --date "$(date -u -v-1d +%F 2>/dev/null || date -u -d yesterday +%F)"
+   ```
+
+   It prints `archive: storing to s3://acme-stake-archive/stake-polling/<team>/`
+   and then `<day>: stored stake-all-<day>.csv.gz (<bytes> bytes, <n> entries)`,
+   and exits 0. An error here (`AccessDenied`, `NoSuchBucket`, a credentials
+   error) is printed as the failure reason and the exit code is 1.
+
+2. **See it in the bucket**, with the archiver's own credentials:
+
+   ```bash
+   aws s3 ls s3://acme-stake-archive/stake-polling/ --recursive
+   ```
+
+3. **Open the dashboard's Archive page** (`http://<host>:3005/archive`). The
+   day is listed, *Last run* names it, and the scope line reads
+   `S3: s3://acme-stake-archive/...`. Click **Download** - the presigned link
+   saves the `.csv.gz` straight from S3 - then check the file is whole:
+
+   ```bash
+   gunzip -t stake-all-<day>.csv.gz && gunzip -c stake-all-<day>.csv.gz | head -3
+   ```
+
+   The first line is `time_utc,entry_id,stream,field,value`.
+
+4. **Confirm the bucket is private**: opening the object's plain URL, without
+   the presigned query string, must answer `AccessDenied`:
+
+   ```bash
+   curl -s https://acme-stake-archive.s3.amazonaws.com/stake-polling/<team>/stake-all-<day>.csv.gz | head -c 200
+   ```
+
+After that, `npm start` (or the service) archives every night on its own; the
+Archive page's *Last run* shows each run and any failure.
+
+A note on the links: until sign-in is on (see *Signing in*), anyone who can
+open the Archive page can use its presigned links while they last. Keep `S3_PRESIGN_SECONDS` short, or bind the dashboard to
+`127.0.0.1`, if that matters on your network.
+
 ## The accounting day
 
 The day rolls at `dayBoundaryUtcHour` UTC - **00:00 UTC** in the shipped
@@ -487,8 +731,9 @@ claim a measured quiet period rather than an absence of measurement.
 ### Every day, not just this one
 
 `d` (or `--view daily` from a pipe) lists profit **per accounting day**, one
-row per 12:00Z-to-12:00Z day, newest first, with the whole roster beside each
-game:
+row per accounting day, newest first, with the whole roster beside each game.
+This example was taken with `dayBoundaryUtcHour` at 12, so its days run
+12:00Z to 12:00Z; at the shipped 0 they are calendar days:
 
 ```
 daily profit   12:00Z -> 12:00Z, newest first
@@ -544,7 +789,7 @@ already written down rather than reconstructed from the trail.
 ## Anomalies
 
 Detection runs on per-tick deltas, against a rolling **median and MAD**
-baseline of the last 36 samples (three hours at a five-minute poll). Median rather than mean because a 40x spike drags a mean and
+baseline of the last 36 samples (90 minutes at the shipped 2.5-minute poll). Median rather than mean because a 40x spike drags a mean and
 inflates a standard deviation — the spike would end up hiding inside the
 baseline it is measured against.
 
@@ -554,7 +799,7 @@ baseline it is measured against.
 | `share_shift` | a game's share of roster turnover moves ≥ 15 points from its baseline share — "traffic is concentrating on this game" |
 | `flat_line` | a previously busy game reports zero turnover for 15 consecutive minutes — usually an outage |
 | `auth` | the sid was rejected |
-| `poll_failure` | no endpoint answered for three consecutive minutes |
+| `poll_failure` | no endpoint answered for three consecutive polls |
 | `new_game` | a slug appeared that this poller had never seen — raised outside the detector, so it does not wait out the 12-sample warm-up |
 
 The absolute floors are written in **dollars per minute**
@@ -594,7 +839,7 @@ All thresholds live in `config.json` under `detect`.
 | `g` | cycle the drill-down through the roster, without descending |
 | `h` | cycle the bucket size: five minutes, then the hour, then off |
 | `c` | compare one bet mode across every game in the roster |
-| `d` | daily profit: one row per 12:00Z-to-12:00Z accounting day |
+| `d` | daily profit: one row per accounting day (it rolls at `dayBoundaryUtcHour`, 00:00Z shipped) |
 | `[` / `]` | step which bet mode the compare screen is showing |
 | `s` | cycle sort: turnover, turnover/min, profit, spins, name — roster, the per-mode table on a game's tabs, and the compare screen |
 | `a` | toggle the alerts / events / running-action panes |
@@ -664,7 +909,7 @@ runs it, stepping with `[`/`]`.
 |---|---|---|
 | `1` HEALTH | MODE, COST, AVGBET, SPINS, TURNOVER, PROFIT, RTP, EFF, NORM, EDGE_API, vs EXP | the latest snapshot only |
 | `2` LIVE | MODE, SPINS/rate, TURN/rate, PROFIT/rate, SHARE, a 12-tick sparkline | per-poll deltas from the per-mode trail |
-| `3` TODAY | MODE, SPINS, TURNOVER, PROFIT, SHARE | totals since the 12:00Z accounting boundary |
+| `3` TODAY | MODE, SPINS, TURNOVER, PROFIT, SHARE | totals since the accounting-day boundary (`dayBoundaryUtcHour`, 00:00Z shipped) |
 | `4` BUCKETS | the same profit-by-bucket table as **Profit by hour**, below, scoped to this game | the trail, at whatever size `h` last picked (5m by default) |
 
 A narrow terminal drops columns by priority rather than truncating the table —
@@ -767,21 +1012,25 @@ the full shape):
 }
 ```
 
-Each field the dashboard actually reads has exactly one consumer, all in
-`src/tui/math.mjs`:
+The checks live in `src/math/checks.mjs`; the Game math page, the game pages
+and the terminal dashboard read the fields below.
 
-| Field | Consumer |
+| Field | What reads it |
 |---|---|
-| `edge` | compared against the deployed `1 - rtp` to raise `model_drift`, and against the convergence band to decide `readable` vs `noise` |
-| `maxWin` | the outer bound of `impossible_margin` — a margin outside `[-maxWin, 100%]` is a plumbing bug, not variance |
-| `costLadder` | the ladder shown on the bet-mode focus card, with the current mode's own rung picked out |
+| `version` | shown on the Game math page and the game page |
+| `edge` | compared against the deployed `1 - rtp` to raise `model_drift`, and against the convergence band to decide `readable` vs `noise`; also the fallback captured RTP for a mode without its own `rtp` |
+| `maxWin` | the outer bound of `impossible_margin` - a margin outside `[-maxWin, 100%]` is a plumbing bug, not variance |
+| `costLadder` | the ladder on the game page and the bet-mode focus card, with the current mode's own rung picked out |
+| `baseVolatility`, `volatilityClass`, `starLevel`, `compliance.*` | the Game math table, the game page's verdicts and the Trends page |
+| `modes.<NAME>.cost`, `modes.<NAME>.rtp` | the **drift** check: a deployed mode whose cost or RTP differs from the captured one - or a deployed mode missing from math.json - is listed in the Game math page's "Deployed math differs" warning |
 | `modes.<NAME>.sigma` | the `σ/√N` convergence band |
-| `modes.<NAME>.zeroRate` / `worstLossStreak` | the `expected_quiet` finding — a zero-profit mode going quiet for fewer spins than its captured worst losing streak is its design, not an outage |
+| `modes.<NAME>.zeroRate` / `worstLossStreak` | the `expected_quiet` finding - a zero-profit mode going quiet for fewer spins than its captured worst losing streak is its design, not an outage |
+| `modes.<NAME>.hitRate`, `breakEvenRate`, `mean` | the per-mode columns on the Game math and bet-mode pages |
 
-`version` and `tail` are captured and stored, but **nothing in the dashboard
-reads either one yet** — they are recorded against the day something does.
-Per-mode `cost` is likewise stored but unused: the `COST` column always comes
-from the live snapshot, never from the model.
+`tail`, `minWin`, `subBetRate`, `avgSpinsBetweenWin` and `worstZeroStreak`
+are captured and stored, but nothing reads them yet - they are recorded
+against the day something does. The `COST` column always comes from the live
+snapshot, never from the model.
 
 A game or mode with no entry degrades exactly as `metro-night-run` would if
 it were deleted from this file: the sample size still prints, no band is
@@ -853,18 +1102,22 @@ Usually you start this together with the collector via `npm start` (see
 **Running everything** above) rather than running `npm run web` on its own;
 either way it is the same server with the same default bind.
 
+**Getting around:** press <kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd> (or <kbd>/</kbd>) anywhere to jump to any page or game. On a phone, the menu button opens the navigation drawer. The thin bar under the header fills up towards the collector's next poll.
+
 The pages, in sidebar order:
 
 | Route | What it shows |
 |---|---|
 | `/` | **Overview.** One row per roster game (bets, turnover, studio P/L month-to-date, P/L today, online) with a total row, plus a *Not yet live* table of every catalogue title that is not turned on (status, approval stage, captured RTP / modes / max win). Simple figures only - every game name opens its game page. |
-| `/analysis` | **Analysis.** Every chart states its conclusion in a sentence computed from the same numbers: four donuts (share of bets, turnover, profit gains, profit losses by game), P/L by game, *luck or fault* noise bands, turnover concentration, feature-buy share, hour-by-hour studio P/L, bets per hour, players online, daily P/L. |
+| `/analysis` | **Analysis.** Every chart states its conclusion in a sentence computed from the same numbers: four donuts (share of bets, turnover, profit gains, profit losses by game), P/L by game, *luck or fault* noise bands, turnover concentration, feature-buy share, hour-by-hour studio P/L, bets per hour, players online, daily P/L. The picker, shortest first, scopes it: a rolling *Last 10 min / 1h / 3h / 6h / 24h / 3 days* read off the trail, *Today* (since 00:00:00Z), or *This month* (the API's month-to-date). **Players:** average and peak players online per game, players new to the month, and how turnover and bets move with the number of players online (Pearson's r and the turnover per extra player, one point per poll interval), plus each game's share of turnover against its share of players. The API never identifies a player, so these relate counts to money; they do not follow any one person. An *On this page* list follows the section you are reading on wide screens. |
 | `/settlement` | **Settlement.** Position, what Stake would settle if the month ended now (10% of summed roster profit plus carry - Stake settles on this, not on `position`), the luck gap, the month-end projection, today against the same hours of yesterday, and whether `/stats`, `/games` and the per-mode response reconcile to the cent, with endpoint freshness. |
-| `/insights` | **Player insights** (was `/`; old `/?game=…` links redirect here). Daily players, new-to-game, returning, filters and the daily CSV export. |
+| `/insights` | **Player insights** (was `/`; old `/?game=…` links redirect here). Daily players, new-to-game, returning, filters, and the daily breakdown as CSV or PDF (`/export.csv`, `/export.pdf`, same filters). |
 | `/live` | The collector's roster, possible events, running action and findings. |
 | `/trends` | Players online every poll, 30 days of bets, turnover, P/L, players, average bet and RTP, turnover by game (the legend lists every game; pick one to chart it on its own scale), and returning players against releases. |
 | `/math` | The captured math corpus (your `math.json`). |
 | `/log` | **Poll log.** Every entry the poller wrote, newest first, 100 a page, filterable by stream, exactly as stored - plus raw CSV downloads. |
+| `/settings` | **Settings.** Security (sign-in), System (Redis memory as a level meter, persistence, poll interval, archive, and showing dismissed warnings again) and About. |
+| `/archive` | **Archive.** Every day the nightly archiver has stored, with a presigned S3 download link - or, for the local directory, the file's own `file://` link and path plus a direct download - and the last run's outcome. See *Nightly archive*. |
 | `/donate` | **Donations.** The project's donation addresses, each with a copy button. |
 | `/game/<slug>` | The drilldown: bet-mode table with a total row first, then P/L by mode, bets against turnover, per-mode noise bands, hourly P/L and bets, players, captured math and verdicts. Titles that are not live get a page too, built from their captured math. |
 
@@ -897,7 +1150,8 @@ It opens an independent reader alongside the running poller; no poller restart
 is needed. The web launcher also runs a bounded daily-history sync using the
 existing `.sid` or `STAKE_SID`. On first launch it fetches up to 30 calendar days
 sequentially (about 61 API requests for a full backfill). Completed historical
-reports are cached; today and yesterday refresh every 15 minutes. A separate
+reports are cached; the sync runs every 3 minutes and re-fetches today and
+yesterday each time. A separate
 `lock:daily-insights` prevents duplicate history syncs when several web servers
 run. Existing poller keys and trails are untouched. Reports live in
 `stake:<team>:insights:daily:v1` and follow Redis persistence settings.
@@ -906,7 +1160,7 @@ Player metrics have precise scopes:
 
 - **Daily players:** the API's distinct players within a game for one **UTC
   calendar date**, midnight to midnight. These API windows use inclusive dates,
-  independently of the terminal dashboard's 12:00Z accounting boundary.
+  independently of the terminal dashboard's accounting-day boundary.
 - **All games:** sums game-level counts. Someone playing two games can appear
   twice; these are not studio-wide deduplicated people.
 - **New to game:** the difference between consecutive end-of-day cumulative
@@ -928,13 +1182,38 @@ automatically. The HTTP routes never make upstream requests or expose the sid.
 **Every interface (`0.0.0.0`) is the default**, so other machines on the network
 can reach it — see **Running everything** above for what that exposes.
 `STAKE_WEB_PORT`, `STAKE_WEB_HOST`, `--port`, and `--host` override it;
-`STAKE_WEB_SYNC=0` disables the history worker. There is no web authentication;
-pass `--host 127.0.0.1` (or set `STAKE_WEB_HOST=127.0.0.1`) to keep private
-studio data off the network.
+`STAKE_WEB_SYNC=0` disables the history worker. Until sign-in is turned on
+(see *Signing in*) anyone who can reach it can use it; pass `--host 127.0.0.1`
+(or set `STAKE_WEB_HOST=127.0.0.1`) to keep private studio data off the network.
+
+## The demo site
+
+**[http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/](http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/)** is the real dashboard, frozen into static pages and fed made-up data. Click anything:
+- the span pickers and the Cmd/Ctrl+K palette;
+- every game page, with its bet modes and captured math;
+- the charts, the settings, and the CSV and PDF exports.
+
+Nothing on it is real, and nothing on it comes from a studio.
+
+How it is made (`npm run demo:build`, then `npm run demo:deploy`):
+
+1. **A made-up studio.** `src/demo/model.mjs` generates twenty fictional games, from Berry Bonanza to Frost Fortune. Each one has:
+   - month-to-date turnover between $500,000 and $2,500,000;
+   - two to five bet modes: base play, sometimes an ante, and feature buys from 40x to 400x;
+   - a daily cycle of players and busier weekends;
+   - feature buys and big wins that pay out lumpily, around an RTP of 94.5-96.75%.
+
+   It is generated from a fixed seed, so the same build moment gives the same demo. The Engine API's five endpoints are answered from this model in the real response shapes.
+2. **The real collector.** The production poller polls that fake API through three simulated days, one 2.5-minute tick at a time, into a Redis namespace of its own (`stake:demo-studio:*`). So the trail, the per-mode fields, the running log and the anomaly alerts are written by exactly the code a real install runs. The daily history, the rollups, a nightly archive file and a captured math model (`src/demo/math.mjs`) are made the same way. One game's math is left stale and one is left uncaptured on purpose, so the Game math warnings show.
+3. **Frozen into pages.** The real web server serves that namespace. Every page, picker setting, game page and export is crawled and saved as static files (`src/demo/site.mjs`). S3's website endpoint ignores query strings, so `/analysis?span=24h` is saved as `/analysis/q/span-24h/` and every link is rewritten to match. The demo namespace is then deleted from Redis.
+4. **Read-only.** Each page carries a banner saying it is a demo. Forms (sign-in, settings, dismissing a warning) show a note instead of posting, and the live refresh is off, because there is no server behind a static page.
+5. **Hosted on S3.** `npm run demo:deploy -- --bucket <name> --create` makes an S3 static-website bucket, public for reading only. It uploads the site gzipped and removes anything an earlier build left behind. Use a bucket that holds nothing but the demo: never the archive bucket, which must stay private.
+
+Built in the first four days of a month, the demo is dated to the last day of the month before, so its month-to-date figures are a full month's worth. The build needs a local Redis. It writes only its own namespace (`DEMO_REDIS_URL`, default database 3) and deletes it afterwards.
 
 ## Configuration
 
-Three layers, later ones winning:
+Four layers, later ones winning:
 
 1. **`config.json`** - shipped with the code, names no studio: poll cadence,
    retention, money share rates, alert thresholds.
@@ -944,10 +1223,16 @@ Three layers, later ones winning:
    and nested sections merge key by key, so `{ "detect": { "zWarn": 3 } }`
    keeps the rest of `detect`. Also where `service.label` and
    `web: { host, port }` go.
-3. **Environment:** `STAKE_TEAM`, `STAKE_LIFETIME_START`, `STAKE_API_URL`,
+3. **`.env`** - yours, gitignored (start from `.env.example`): secrets and
+   switches, read into the environment at startup. A variable already set in
+   the real environment wins over the file.
+4. **Environment:** `STAKE_TEAM`, `STAKE_LIFETIME_START`, `STAKE_API_URL`,
    `REDIS_URL`, `STAKE_SID`, `STAKE_SID_FILE`, `STAKE_TIMEOUT_MS`,
    `STAKE_POLL_MINUTES`, `STAKE_WEB_HOST`, `STAKE_WEB_PORT`, `STAKE_WEB_SYNC`,
-   `STAKE_WAIT_FOR_REDIS_MS`.
+   `STAKE_WAIT_FOR_REDIS_MS`; Redis: `REDIS_USERNAME`, `REDIS_PASSWORD`,
+   `REDIS_DB_SIZE`; the archive: `S3_BUCKET`, `S3_PREFIX`, `S3_PRESIGN_SECONDS`,
+   `STAKE_ARCHIVE_DIR`, and the AWS SDK's own (`AWS_REGION`, `AWS_PROFILE`,
+   `AWS_ACCESS_KEY_ID`, ...); `STAKE_MATH_FILE` (a math.json other than the root one); and for the demo build, `DEMO_REDIS_URL`.
 
 Startup refuses a missing team or an invalid `lifetimeStart` with a message
 naming where to set it.
@@ -956,7 +1241,7 @@ naming where to set it.
 
 - One poller per team per Redis. The lock enforces it; a second copy exits with
   a message rather than corrupting the trail. Ctrl-C releases the lock
-  immediately, so a restart is instant rather than waiting out the 90s TTL.
+  immediately, so a restart is instant rather than waiting out the lock's TTL.
 - The poller makes authenticated outbound requests. Some agent sandboxes
   classify a `sid`-bearing request as data exfiltration and block it — run the
   daemon from a normal shell.
@@ -966,6 +1251,19 @@ naming where to set it.
   goes blank. A value that is genuinely unknown is omitted rather than written
   as `0`, because a fabricated zero is indistinguishable from a real collapse
   and would fire a `drop` alert.
+
+## Third-party software
+
+Installed from npm, not copied into this repository:
+
+| Package | Licence | Used for |
+|---|---|---|
+| [redis](https://github.com/redis/node-redis) | MIT | the Redis client |
+| [@aws-sdk/client-s3](https://github.com/aws/aws-sdk-js-v3), [@aws-sdk/s3-request-presigner](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 | the S3 archive and the demo deploy; loaded only when `S3_BUCKET` is set |
+| [Apache ECharts](https://echarts.apache.org) (with zrender, BSD-3-Clause) | Apache-2.0 | the heatmap, treemap, Sankey and zoomable trend, served from this dashboard, not a CDN |
+| [Smoothie Charts](http://smoothiecharts.org) | MIT | the live-stream strips on Live operations |
+
+The PDF writer, the QR encoder and every other chart are written here, with no dependency.
 
 ## License
 

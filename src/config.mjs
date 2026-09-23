@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { DEFAULT_MONEY } from './money.mjs';
+import { parseSize, DEFAULT_REDIS_LIMIT } from './store/memory.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TEAM_RE = /^[a-z0-9][a-z0-9-]*$/i;
@@ -34,8 +35,16 @@ const MINUTES_PER_DAY = 1440;
  * @param {{ env?: NodeJS.ProcessEnv, root?: string, local?: string | null }} [opts]
  */
 export function loadConfig(opts = {}) {
-  const env = opts.env ?? process.env;
   const root = opts.root ?? ROOT;
+  // .env at the root (gitignored; start from .env.example) holds this
+  // install's secrets and switches - REDIS_PASSWORD, S3_BUCKET, AWS_*. Only
+  // for a real run: a test passes its own env. A variable already set in the
+  // real environment wins over the file.
+  if (opts.env === undefined) {
+    const dotEnv = join(root, '.env');
+    if (existsSync(dotEnv)) process.loadEnvFile(dotEnv);
+  }
+  const env = opts.env ?? process.env;
   const localPath = opts.local === undefined ? join(root, 'config.local.json') : opts.local;
   const file = merge(readJson(join(root, 'config.json')), localPath && existsSync(localPath) ? readJson(localPath) : {});
 
@@ -55,6 +64,8 @@ export function loadConfig(opts = {}) {
     lifetimeStart: env.STAKE_LIFETIME_START ?? file.lifetimeStart,
     apiUrl: stripSlash(env.STAKE_API_URL ?? file.apiUrl),
     redisUrl: env.REDIS_URL ?? file.redisUrl,
+    // Past this, every screen carries a sticky alert (src/store/memory.mjs).
+    redisMemoryLimit: env.REDIS_DB_SIZE ?? file.redisDbSize ?? DEFAULT_REDIS_LIMIT,
     sidFile: env.STAKE_SID_FILE ?? join(root, file.sidFile),
     timeoutMs: positive(env.STAKE_TIMEOUT_MS, file.timeoutMs),
     dayBoundaryUtcHour: file.dayBoundaryUtcHour ?? 12,
@@ -75,6 +86,18 @@ export function loadConfig(opts = {}) {
 
   cfg.detect = buildDetect(file.detect ?? {}, pollMinutes, money);
 
+  // The nightly archive (src/archive): to S3 when S3_BUCKET is set, else to a
+  // local directory. The AWS SDK finds its own credentials and region
+  // (AWS_PROFILE, AWS_ACCESS_KEY_ID, ~/.aws, ...), so none are held here.
+  cfg.archive = {
+    bucket: env.S3_BUCKET || null,
+    prefix: String(env.S3_PREFIX ?? 'stake-polling').replace(/^\/+|\/+$/g, ''),
+    region: env.AWS_REGION || env.AWS_DEFAULT_REGION || null,
+    localDir: env.STAKE_ARCHIVE_DIR || join(root, 'stake-polling-logrotate-data'),
+    presignSeconds: Math.round(positive(env.S3_PRESIGN_SECONDS, 3600)),
+    catchUpDays: 7,
+  };
+
   if (cfg.team === undefined || cfg.team === '') {
     throw new Error('no team configured: copy config.local.example.json to config.local.json and set "team" to your studio\'s slug '
       + '(the <slug> in studio.engine.io/teams/<slug>), or set STAKE_TEAM');
@@ -87,6 +110,17 @@ export function loadConfig(opts = {}) {
   if (!DATE_RE.test(String(cfg.lifetimeStart ?? '')) || Number.isNaN(Date.parse(`${cfg.lifetimeStart}T00:00:00Z`))) {
     throw new Error(`invalid lifetimeStart: ${JSON.stringify(cfg.lifetimeStart)} - set it in config.local.json (or STAKE_LIFETIME_START) `
       + 'to the YYYY-MM-DD your studio\'s first game went live');
+  }
+  cfg.redisMemoryLimitBytes = parseSize(cfg.redisMemoryLimit);
+  if (cfg.redisMemoryLimitBytes === null) {
+    throw new Error(`invalid REDIS_DB_SIZE: ${JSON.stringify(cfg.redisMemoryLimit)} - use a size like 2GB or 512MB, or a byte count`);
+  }
+  if (cfg.archive.bucket !== null && !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(cfg.archive.bucket)) {
+    throw new Error(`invalid S3_BUCKET: ${JSON.stringify(cfg.archive.bucket)} - 3 to 63 lowercase letters, digits, dots and hyphens`);
+  }
+  // SigV4 caps a presigned URL at seven days.
+  if (cfg.archive.presignSeconds > 604800) {
+    throw new Error(`invalid S3_PRESIGN_SECONDS: ${cfg.archive.presignSeconds} - a presigned URL lasts at most 604800 seconds (7 days)`);
   }
   if (!/^https?:\/\//.test(cfg.apiUrl)) {
     throw new Error(`invalid apiUrl: ${cfg.apiUrl}`);

@@ -1,16 +1,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spanOf, spanStart, SPANS, gameRowsOver, modeRowsOver } from '../src/insights/span.mjs';
+import { spanOf, spanStart, SPANS, GAME_SPANS, gameRowsOver, modeRowsOver } from '../src/insights/span.mjs';
 
 const money = { unitsPerDollar: 1_000_000, profitShare: 0.1, expectedShare: 0.075 };
 const M = 60000;
 
-test('spanOf accepts the three spans and defaults to the month', () => {
-  assert.deepEqual(Object.keys(SPANS), ['month', 'today', '24h']);
-  assert.equal(spanOf('today'), 'today');
-  assert.equal(spanOf('24h'), '24h');
+test('spanOf accepts every span and defaults to the month', () => {
+  assert.deepEqual(Object.keys(SPANS), ['10m', '1h', '3h', '6h', '24h', '3d', 'today', 'month'], 'shortest first');
+  for (const span of Object.keys(SPANS)) assert.equal(spanOf(span), span);
   assert.equal(spanOf('nonsense'), 'month');
   assert.equal(spanOf(null), 'month');
+  assert.equal(spanOf('hasOwnProperty'), 'month');
+});
+
+test('spanOf narrowed to the game page\'s spans turns anything longer back to the month', () => {
+  assert.deepEqual(GAME_SPANS, ['24h', 'today', 'month']);
+  assert.equal(spanOf('24h', GAME_SPANS), '24h');
+  assert.equal(spanOf('3d', GAME_SPANS), 'month');
+  assert.equal(spanOf('1h', GAME_SPANS), 'month');
+});
+
+test('every rolling span starts exactly its hours back', () => {
+  const now = Date.parse('2026-09-22T01:00:00Z');
+  assert.equal(spanStart('10m', now), Date.parse('2026-09-22T00:50:00Z'));
+  assert.equal(spanStart('1h', now), Date.parse('2026-09-22T00:00:00Z'));
+  assert.equal(spanStart('3h', now), Date.parse('2026-09-21T22:00:00Z'));
+  assert.equal(spanStart('6h', now), Date.parse('2026-09-21T19:00:00Z'));
+  assert.equal(spanStart('3d', now), Date.parse('2026-09-19T01:00:00Z'));
 });
 
 test('Today starts at 00:00:00Z whatever the time, and Last 24h is exactly 24 hours back', () => {

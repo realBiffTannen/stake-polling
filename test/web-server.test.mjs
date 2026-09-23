@@ -37,7 +37,9 @@ test('fragment, CSV, health, invalid routes and methods have correct HTTP behavi
   const csv = await fetch(base + '/export.csv?from=2026-09-17&to=2026-09-17&game=berry');
   assert.match(csv.headers.get('content-type'), /text\/csv/);
   assert.match(await csv.text(), /2026-09-17,berry,10,10,0/);
-  assert.equal((await fetch(base + '/healthz')).status, 200);
+  const health = await fetch(base + '/healthz');
+  assert.equal(health.status, 200);
+  assert.match((await health.json()).version, /^\d+\.\d+\.\d+$/);
   assert.equal((await fetch(base + '/nope')).status, 404);
   assert.equal((await fetch(base + '/', { method: 'POST' })).status, 405);
   assert.equal((await (await fetch(base + '/', { method: 'HEAD' })).text()), '');
@@ -54,11 +56,11 @@ test('browser reports refresh failures while preserving data and clears the noti
   const main = { innerHTML: 'Cached figures', contains: () => false };
   const status = { hidden: true, textContent: '' };
   const document = { hidden: false, activeElement: {}, querySelector: s => s === 'main' ? main : null,
-    querySelectorAll: () => [], getElementById: () => status, addEventListener() {} };
+    querySelectorAll: () => [], getElementById: () => status, addEventListener() {}, dispatchEvent() {} };
   // By delay, not by registration order: the script registers more than one
   // interval (the poll countdown runs on its own), and "whichever came last"
   // silently captured the wrong callback the moment a second one was added.
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, performance: { now: () => 0 },
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, performance: { now: () => 0 },
     fetch: async () => ({ ok, text: async () => 'Fresh figures' }), setInterval: (fn, ms) => { if (ms === 30000) refresh = fn; } });
   await refresh();
   assert.equal(main.innerHTML, 'Cached figures');
@@ -67,6 +69,39 @@ test('browser reports refresh failures while preserving data and clears the noti
   ok = true; await refresh();
   assert.equal(main.innerHTML, 'Fresh figures');
   assert.equal(status.hidden, true);
+});
+
+function dismissHarness(fetchImpl) {
+  const listeners = {};
+  const notice = { hidden: false };
+  const form = { action: '/dismiss', matches: (sel) => sel === 'form[data-dismiss-form]', closest: (sel) => (sel === '[data-dismiss-key]' ? notice : null) };
+  const status = { hidden: true, textContent: '' };
+  const document = { hidden: false, activeElement: {}, querySelector: s => (s === 'main' ? { contains: () => false } : null), getElementById: () => status,
+    querySelectorAll: () => [], addEventListener(type, fn) { (listeners[type] ??= []).push(fn); }, dispatchEvent() {} };
+  const calls = [];
+  class FormData { constructor() { return [['csrf', 'tok-tok-tok-tok-tok'], ['key', 'math-drift:aaaaaaaaaaaa'], ['back', '/math']]; } }
+  runInNewContext(INSIGHTS_JS, { document, URL, URLSearchParams, FormData, CustomEvent, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 },
+    setTimeout: () => 0, fetch: async (url, opts) => { calls.push([url, opts]); return fetchImpl(); }, setInterval() {} });
+  const submit = () => Promise.all(listeners.submit.map((fn) => fn({ target: form, preventDefault() {} })));
+  return { notice, status, calls, submit };
+}
+
+test('dismissing a warning posts it to the server for everyone and hides it in place', async () => {
+  const h = dismissHarness(async () => ({ ok: true, status: 204 }));
+  await h.submit();
+  assert.equal(h.notice.hidden, true);
+  const [url, opts] = h.calls[0];
+  assert.equal(url, '/dismiss');
+  assert.equal(opts.method, 'POST');
+  assert.equal(String(opts.body), 'csrf=tok-tok-tok-tok-tok&key=math-drift%3Aaaaaaaaaaaaa&back=%2Fmath');
+});
+
+test('a dismissal the server did not save brings the warning back and says so', async () => {
+  const h = dismissHarness(async () => ({ ok: false, status: 403 }));
+  await h.submit();
+  assert.equal(h.notice.hidden, false, 'not saved, so not hidden');
+  assert.equal(h.status.hidden, false);
+  assert.match(h.status.textContent, /Could not dismiss/);
 });
 
 // A stand-in DOM just deep enough for the chart tooltip: it records text set
@@ -88,7 +123,7 @@ function fakeTipDom() {
 
 test('hovering a chart band shows that point\'s label and every series value, as text', () => {
   const { document, body, fire, text } = fakeTipDom();
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
   const hit = { dataset: { tip: JSON.stringify({ label: '2026-09-11', rows: [{ name: '<b>players</b>', value: '1680', colour: '#38d6c4' }, { name: 'returning', value: '-', colour: '#7ddf64' }] }) } };
   fire('pointermove', { target: { closest: () => hit }, clientX: 300, clientY: 200 });
   assert.equal(body.children.length, 1, 'one tooltip, created on first use');
@@ -103,7 +138,7 @@ test('hovering a chart band shows that point\'s label and every series value, as
 
 test('the tooltip flips to stay inside the viewport at the right edge', () => {
   const { document, body, fire } = fakeTipDom();
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
   const hit = { dataset: { tip: JSON.stringify({ label: 'd', rows: [] }) } };
   fire('pointermove', { target: { closest: () => hit }, clientX: 980, clientY: 200 });
   assert.ok(parseFloat(body.children[0].style.left) + 100 <= 1000, 'right edge stays on screen');
@@ -111,7 +146,7 @@ test('the tooltip flips to stay inside the viewport at the right edge', () => {
 
 test('a malformed data-tip hides the tooltip instead of throwing', () => {
   const { document, fire } = fakeTipDom();
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
   assert.doesNotThrow(() => fire('pointermove', { target: { closest: () => ({ dataset: { tip: '{nope' } }) }, clientX: 1, clientY: 1 }));
 });
 
@@ -403,6 +438,18 @@ test('/analysis renders and asks read() for every game\'s mode trail - the tape 
   assert.equal(hints.at(-1).modesFor, null, 'pages without a tape read no mode trails');
 });
 
+test('/analysis asks read() for a deeper trail only when the span outruns the shared 24 hours', async t => {
+  const { base, hints } = await setupHinted(t);
+  assert.equal((await fetch(base + '/analysis?span=3d')).status, 200);
+  assert.equal(hints.at(-1).trailHours, 72);
+  for (const span of ['month', 'today', '1h', '3h', '6h', '24h']) {
+    await fetch(base + `/analysis?span=${span}`);
+    assert.equal(hints.at(-1).trailHours, null, span);
+  }
+  await fetch(base + '/game/berry?span=3d');
+  assert.equal(hints.at(-1).trailHours, null, 'a game page never reads past 24 hours');
+});
+
 test('a game page asks for that game\'s mode trail only', async t => {
   const { base, hints } = await setupHinted(t);
   assert.equal((await fetch(base + '/game/berry?span=24h')).status, 200);
@@ -480,4 +527,20 @@ test('the trends page asks for the studio\'s 7-day history, a game page for its 
   assert.equal(hints.at(-1).history, 'berry');
   await fetch(base + '/analysis');
   assert.equal(hints.at(-1).history, null);
+});
+
+test('the daily breakdown exports as CSV and as PDF, for the same selection', async t => {
+  const base = await setup(t);
+  const page = await (await fetch(base + '/insights?from=2026-09-17&to=2026-09-17&game=berry')).text();
+  const panel = page.slice(page.indexOf('id="daily-breakdown"'));
+  assert.match(panel, /href="\/export\.csv\?from=2026-09-17&amp;to=2026-09-17&amp;game=berry[^"]*" download>CSV ↓/);
+  assert.match(panel, /href="\/export\.pdf\?from=2026-09-17&amp;to=2026-09-17&amp;game=berry[^"]*" download>PDF ↓/);
+  const pdf = await fetch(base + '/export.pdf?from=2026-09-17&to=2026-09-17&game=berry');
+  assert.equal(pdf.status, 200);
+  assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+  assert.equal(pdf.headers.get('content-disposition'), 'attachment; filename="player-insights-2026-09-17-to-2026-09-17.pdf"');
+  const body = await pdf.text();
+  assert.ok(body.startsWith('%PDF-1.4'));
+  assert.match(body, /\(2026-09-17 \\\(in progress\\\)\) Tj/, 'the row, its parentheses escaped for PDF');
+  assert.match(body, /\(\$100\.00\) Tj/, 'turnover, formatted as on the page');
 });

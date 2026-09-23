@@ -17,7 +17,8 @@ import { lineChart } from '../charts/line.mjs';
 import { MODE_COLOURS } from '../svg.mjs';
 import { totalsOf } from '../../tui/state.mjs';
 import { spanPicker, chartPanel } from './parts.mjs';
-import { SPANS, spanStart, modeRowsOver } from '../../insights/span.mjs';
+import { ICONS } from './icons.mjs';
+import { SPANS, GAME_SPANS, spanStart, modeRowsOver } from '../../insights/span.mjs';
 import { pnlByMode, modeMix, modeBands, bandHeadline, hourlySeries, pnlTrend, betsTrend } from '../../insights/conclusions.mjs';
 import { hbars, pairedBars, bandChart } from '../charts/hbars.mjs';
 import { columns } from '../charts/columns.mjs';
@@ -115,17 +116,18 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
 
   const heading = html`<div class="page-heading"><div><div class="eyebrow">GAME</div><h1>${name}<span>.</span></h1>
       <p>${notLive ? 'Captured math for a title that is not live yet.' : 'Bet modes first, then captured math against observed play. Month-to-date figures run from the 1st at 00:00Z.'}</p></div>
-    ${notLive ? null : html`<a class="button secondary" href="/game/${encodeURIComponent(slug)}/buckets">Bucket cadence ↗</a>
-    <a class="button secondary" href="/insights?game=${encodeURIComponent(slug)}">Player insights ↗</a>
-    <a class="button secondary" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}`, date: today })}">Raw CSV today ↓</a>
-    <a class="button secondary" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}:modes`, date: today })}">Modes CSV today ↓</a>`}</div>`;
+    ${notLive ? null : html`<div class="heading-actions"><a class="button secondary" href="/game/${encodeURIComponent(slug)}/buckets">Bucket cadence ↗</a>
+    <details class="overflow"><summary class="button secondary" aria-label="More actions" title="More actions">${ICONS.more}</summary>
+      <div class="menu" role="menu"><a role="menuitem" href="/insights?game=${encodeURIComponent(slug)}">Player insights ↗</a>
+      <a role="menuitem" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}`, date: today })}">Raw CSV today ↓</a>
+      <a role="menuitem" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}:modes`, date: today })}">Modes CSV today ↓</a></div></details></div>`}</div>`;
 
   const modesPanel = html`<section class="panel"><div class="section-heading"><div><h2>Bet modes</h2>
       <p>${notLive ? 'The modes in the captured math model. Nothing has been played, so every observed figure is a dash.'
         : span === 'month' ? 'Month-to-date per mode, from the game endpoint. One bet is one game played. Player identity is not reported per mode.'
           : `Per mode ${SPANS[span].words === 'today' ? 'since 00:00:00Z today' : 'over the last 24 hours'}, from the collector's own trail. One bet is one game played; average bet and the effective/normalized RTPs are only reported for the month.`}</p></div>
       <span class="tag">${rows.length} modes</span></div>
-    ${notLive ? null : html`<div class="scope-line"><span>${spanPicker(`/game/${encodeURIComponent(slug)}`, span)}</span></div>`}
+    ${notLive ? null : html`<div class="scope-line"><span>${spanPicker(`/game/${encodeURIComponent(slug)}`, span, GAME_SPANS)}</span></div>`}
     ${modeTable({ slug, rows, math, state })}</section>`;
 
   if (notLive) {
@@ -133,7 +135,7 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
   <div class="notice warning">${name} is not live${title.published === false ? ' and not published' : ''}. The API reports no play data for it${title.approval ? html` - approval stage: <b>${title.approval}</b>` : null}.</div>
   ${modesPanel}
   ${mathCard(math)}`;
-    return shell({ state, body, active: 'overview', title: name });
+    return shell({ state, body, active: 'overview', title: name, crumbs: [{ label: name }] });
   }
 
   const pnl = pnlByMode(rows, state.money);
@@ -263,5 +265,5 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
     <p>Players online every poll, the last 30 days of play, and when in the day it happens.</p></div></div>
   ${gameTrendPanels({ slug, name, state, modeRows, span, online })}`;
 
-  return shell({ state, body, active: 'overview', title: name });
+  return shell({ state, body, active: 'overview', title: name, crumbs: [{ label: name }] });
 }
