@@ -21,12 +21,13 @@ import { spanPicker, chartPanel } from './parts.mjs';
 import { SPANS, spanStart, gameRowsOver, modeRowsOver } from '../../insights/span.mjs';
 import {
   pnlByGame, turnoverShare, buyShare, gameBands, bandHeadline, hourlySeries, pnlTrend, betsTrend,
-  onlineHourly, dailyPnl, donutSets,
+  onlineHourly, dailyPnl, donutSets, turnoverTree, turnoverFlow, BUY_COST,
 } from '../../insights/conclusions.mjs';
 import { hbars, bandChart } from '../charts/hbars.mjs';
 import { columns } from '../charts/columns.mjs';
 import { lineChart } from '../charts/line.mjs';
 import { donut, GAME_COLOURS, OTHER_COLOUR } from '../charts/donut.mjs';
+import { interactiveChart, emptyChart, treemapData, sankeyData } from '../charts/interactive.mjs';
 import { html as h } from '../html.mjs';
 import { pct, usd, blank, DASH } from '../format.mjs';
 import { holdTable, holdHeadline, buyEconomics, playerWorth, quietByGame, unusualDays } from '../../insights/economics.mjs';
@@ -74,12 +75,18 @@ export function renderAnalysis({ state, model, span = 'month' }) {
 
   const sets = donutSets(rows, { span: words });
   const colourOf = (s) => (s.slot === null ? OTHER_COLOUR : GAME_COLOURS[s.slot]);
+  // The same colour per game on every chart here: the slot the donuts gave
+  // it, or Other's grey for a game that did not win one.
+  const slots = new Map(Object.values(sets).flatMap((set) => set.slices).filter((s) => s.slot !== null).map((s) => [s.key, s.slot]));
+  const gameColour = (slug) => (slots.has(slug) ? GAME_COLOURS[slots.get(slug)] : OTHER_COLOUR);
   const ring = (set, title, format, centre) => donut({ slices: set.slices.map((s) => ({ ...s, colour: colourOf(s) })), title, format, centre });
 
   const pnl = pnlByGame(rows);
   const bands = gameBands(modesBySlug, state.math ?? {}, labels);
   const share = turnoverShare(rows, { span: words });
   const buys = buyShare(modesBySlug, labels);
+  const tree = turnoverTree(modesBySlug, labels, money, { span: words });
+  const flow = turnoverFlow(modesBySlug, labels, money, { span: words });
 
   // The hour-by-hour panels: since midnight for "today"; for a window shorter
   // than a day, every clock hour it reaches into, so the chart starts at the
@@ -139,7 +146,17 @@ export function renderAnalysis({ state, model, span = 'month' }) {
 
   ${panel('Where the turnover goes', share.headline, hbars({ rows: share.bars, tone: 'neutral', format: pct1, title: 'Share of turnover' }))}
 
+  ${panel('Turnover by game and bet mode', tree.headline,
+    tree.total ? interactiveChart({ id: 'turnover-tree', kind: 'treemap', title: `Turnover by game and bet mode, ${words}`, data: treemapData(tree, gameColour) })
+      : emptyChart('No bet mode has measured turnover in this span yet.'),
+    'Area is turnover. Each game keeps its donut colour; its tiles are its bet modes. Click a game to open it up, and the bar underneath to step back out.')}
+
   ${panel('Feature buys against base play', buys.headline, hbars({ rows: buys.bars, tone: 'neutral', format: pct1, title: 'Feature-buy share of turnover' }))}
+
+  ${panel('Where each game\'s turnover flows', flow.headline,
+    flow.total ? interactiveChart({ id: 'turnover-flow', kind: 'sankey', title: `Studio turnover by game, then base play or feature buys, ${words}`, data: sankeyData(flow, gameColour) })
+      : emptyChart('No bet mode has measured turnover in this span yet.'),
+    `Band width is turnover. A feature buy is a mode costing more than ${BUY_COST}x the base bet, the same split as the bars above; a mode whose cost was never read counts as base play.`)}
 
   ${panel('Realised against theoretical hold', holdHeadline(hold),
     hbars({ rows: hold.map((r) => ({ key: r.key, label: r.label, value: r.deltaPp })), tone: 'sign',
