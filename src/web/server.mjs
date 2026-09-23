@@ -24,8 +24,15 @@ import { renderTrends } from './views/trends.mjs';
 import { renderMath } from './views/math.mjs';
 import { renderDonate } from './views/donate.mjs';
 import { renderArchive } from './views/archive.mjs';
+import { renderLogin } from './views/login.mjs';
+import { renderSettings } from './views/settings.mjs';
+import { viewerMenu, pollBarHtml } from './views/shell.mjs';
+import { parseCookies, cookie, isSecure, newCsrf, csrfOk, readForm, safeNext, SESSION_COOKIE, CSRF_COOKIE } from './http-auth.mjs';
 import { VERSION } from '../version.mjs';
 import { gameModel } from '../math/checks.mjs';
+
+// The only routes that take a POST: every other route is read-only.
+const POST_ROUTES = new Set(['/login', '/logout', '/settings/auth']);
 
 const HEADERS = {
   'content-security-policy': "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
@@ -115,7 +122,7 @@ const COMPRESSIBLE = /^(text\/|application\/json|image\/svg\+xml)/;
  * poll - are fills, recomputed on every serve (see fills.mjs). `warm(paths)`
  * renders pages into the cache ahead of the first visitor after a tick.
  */
-export function createWebServer({ read, log = null, exporter = null, archive = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
+export function createWebServer({ read, log = null, exporter = null, archive = null, auth = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
   const pages = createPageCache({ max: 200, ttlMs: pageTtlMs, now });
 
   // Everything behind the static files: one rendered response, never touched
@@ -210,9 +217,11 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
   }
 
   // The request-time values, as of this serve.
-  const fillsFor = (entry) => ({
+  const fillsFor = (entry, viewer) => ({
     age: () => polledText(entry.lastOk ? Math.max(0, now() - entry.lastOk) : null),
     countdown: () => countdownHtml(now(), entry.pollMinutes),
+    pollbar: () => pollBarHtml(now(), entry.pollMinutes),
+    viewer: () => viewerMenu(viewer),
   });
 
   const server = createServer(async (req, res) => {
@@ -228,9 +237,12 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
       res.writeHead(status, headers);
       res.end(req.method === 'HEAD' ? '' : payload);
     };
-    if (!['GET', 'HEAD'].includes(req.method)) return send(405, 'Method not allowed', 'text/plain', { allow: 'GET, HEAD' });
     let url;
     try { url = new URL(req.url, 'http://localhost'); } catch { return send(400, 'Invalid URL', 'text/plain'); }
+    const postable = POST_ROUTES.has(url.pathname);
+    if (!(['GET', 'HEAD'].includes(req.method) || (req.method === 'POST' && postable))) {
+      return send(405, 'Method not allowed', 'text/plain', { allow: postable ? 'GET, HEAD, POST' : 'GET, HEAD' });
+    }
     const file = STATIC[url.pathname];
     if (file) {
       // A day under its content-hash URL, then revalidated by ETag.
@@ -243,6 +255,97 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
       return res.end(req.method === 'HEAD' ? '' : zipped ? file.gzip : file.body);
     }
     if (url.pathname === '/favicon.ico') return send(204, '', 'image/x-icon');
+
+    // ---- sign-in. Everything below this needs a session while sign-in is on,
+    // except /healthz (for monitors) and the sign-in page itself.
+    const cookies = parseCookies(req.headers.cookie);
+    const secure = isSecure(req);
+    const setCookies = [];
+    let csrf = cookies[CSRF_COOKIE];
+    if (!csrf || csrf.length < 16 || csrf.length > 100) {
+      csrf = newCsrf();
+      setCookies.push(cookie(CSRF_COOKIE, csrf, { secure }));
+    }
+    const withCookies = (extra = {}, more = []) => (setCookies.length || more.length ? { ...extra, 'set-cookie': [...setCookies, ...more] } : extra);
+    const redirect = (location, more = []) => { res.writeHead(303, { ...HEADERS, location, ...withCookies({}, more) }); res.end(); };
+    let viewer = { enabled: false, csrf };
+    if (auth) {
+      try {
+        const status = await auth.status();
+        const user = status.enabled ? await auth.sessionUser(cookies[SESSION_COOKIE]) : null;
+        viewer = { enabled: status.enabled, username: user ?? status.username, user, csrf };
+      } catch {
+        // Unknown is not "off": with Redis unreadable, fail closed.
+        return send(503, 'The sign-in check is unavailable. Check Redis, then reload.', 'text/plain');
+      }
+    }
+    const ip = req.socket.remoteAddress ?? '?';
+    const sessionCookie = (result) => cookie(SESSION_COOKIE, result.token, { maxAge: result.maxAge, secure });
+    const clearSession = cookie(SESSION_COOKIE, '', { maxAge: 0, secure });
+
+    if (req.method === 'POST') {
+      const form = await readForm(req).catch(() => null);
+      if (!form) return send(400, 'Send the form as application/x-www-form-urlencoded, under 16 KB.', 'text/plain');
+      const valid = csrfOk(req, cookies, form);
+      if (url.pathname === '/login') {
+        const next = safeNext(form.get('next'));
+        if (!auth || !viewer.enabled) return redirect('/');
+        if (!valid) return redirect(`/login?error=csrf&next=${encodeURIComponent(next)}`);
+        const result = await auth.login({ username: form.get('username') ?? '', password: form.get('password') ?? '', keep: form.get('keep') === '1', ip });
+        if (result.error) return redirect(`/login?error=${result.error}&next=${encodeURIComponent(next)}`);
+        return redirect(next, [sessionCookie(result)]);
+      }
+      if (url.pathname === '/logout') {
+        if (!valid) return send(403, 'The form expired. Reload the page and try again.', 'text/plain');
+        if (auth) await auth.logout(cookies[SESSION_COOKIE]);
+        return redirect(viewer.enabled ? '/login' : '/', [clearSession]);
+      }
+      // /settings/auth
+      const action = String(form.get('action') ?? '');
+      const back = (params) => `/settings?${new URLSearchParams({ tab: 'security', ...params })}`;
+      if (!auth) return send(404, 'Page not found', 'text/plain');
+      if (!valid) return redirect(back({ error: 'csrf', form: action }));
+      if (action !== 'enable' && !viewer.user) return viewer.enabled ? redirect('/login?next=%2Fsettings') : redirect(back({ error: 'not-on', form: action }));
+      const current = form.get('current') ?? '';
+      let result;
+      if (action === 'enable') result = await auth.enable({ username: form.get('username') ?? '', password: form.get('password') ?? '', confirm: form.get('confirm') ?? '' });
+      else if (action === 'change') result = await auth.change({ current, username: form.get('username') ?? '', password: form.get('password') ?? '', confirm: form.get('confirm') ?? '', ip });
+      else if (action === 'signout-all') result = await auth.signOutEverywhere({ current, ip });
+      else if (action === 'disable') result = await auth.disable({ current, ip });
+      else return send(400, 'Unknown settings action.', 'text/plain');
+      if (result.error) return redirect(back({ error: result.error, form: action }));
+      if (action === 'enable') return redirect(back({ ok: 'enabled' }), [sessionCookie(result)]);
+      if (action === 'change') return redirect(back({ ok: 'changed' }), [sessionCookie(result)]);
+      if (action === 'signout-all') return redirect('/login?next=%2Fsettings', [clearSession]);
+      return redirect(back({ ok: 'disabled' }), [clearSession]);
+    }
+
+    if (url.pathname === '/login') {
+      if (!viewer.enabled) return redirect('/');
+      if (viewer.user) return redirect(safeNext(url.searchParams.get('next')));
+      const page = documentFor({ body: renderLogin({ error: url.searchParams.get('error'), next: safeNext(url.searchParams.get('next')), csrf }), title: 'Sign in' });
+      return send(200, page, 'text/html; charset=utf-8', withCookies());
+    }
+    if (viewer.enabled && !viewer.user && url.pathname !== '/healthz') {
+      // A page load goes to the sign-in page and comes back after; anything
+      // else (a live-refresh fragment, a CSV, an archive file) is just refused.
+      const pageLoad = req.method === 'GET' && url.searchParams.get('fragment') !== '1' && !url.pathname.startsWith('/export') && !url.pathname.startsWith('/archive/file/');
+      if (pageLoad) return redirect(`/login?next=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
+      return send(401, 'Sign in required.', 'text/plain', withCookies());
+    }
+    if (url.pathname === '/settings') {
+      if (!auth) return send(404, 'Page not found', 'text/plain');
+      try {
+        const { state } = await read(queryFor(url), {});
+        const flash = { ok: url.searchParams.get('ok'), error: url.searchParams.get('error'), form: url.searchParams.get('form') };
+        const body = renderSettings({ state, tab: url.searchParams.get('tab'), auth: { enabled: viewer.enabled, username: viewer.username }, csrf, flash,
+          confirm: url.searchParams.get('confirm'), archive: archive?.describe?.() ?? null, version: VERSION });
+        const doc = url.searchParams.get('fragment') === '1' ? String(body) : documentFor({ body, title: 'Settings', team: state?.meta?.team ?? null });
+        return send(200, refill(doc, fillsFor({ lastOk: state.lastOk, pollMinutes: state.pollMinutes }, viewer)), 'text/html; charset=utf-8', withCookies());
+      } catch {
+        return send(503, 'Settings are unavailable. Check Redis, then reload.', 'text/plain');
+      }
+    }
     if (url.pathname.startsWith('/archive/file/')) {
       // The local store's files. An S3 store answers null here - its links go
       // straight to S3, presigned - and so does any name that is not exactly
@@ -277,8 +380,10 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
       return res.end();
     }
     const out = cacheable(url.pathname) ? await pageFor(url) : await route(url);
-    const body = out.status === 200 && out.type?.startsWith('text/html') && 'lastOk' in out ? refill(out.body, fillsFor(out)) : refill(out.body);
-    return send(out.status, body, out.type, out.headers ?? {});
+    const isPage = out.status === 200 && out.type?.startsWith('text/html');
+    const entry = 'lastOk' in out ? out : { lastOk: out.state?.lastOk ?? null, pollMinutes: out.state?.pollMinutes };
+    const body = isPage ? refill(out.body, fillsFor(entry, viewer)) : refill(out.body);
+    return send(out.status, body, out.type, isPage ? withCookies(out.headers ?? {}) : out.headers ?? {});
   });
 
   /** Render `paths` into the page cache, one after another; failures are skipped. */

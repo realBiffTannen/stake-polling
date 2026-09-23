@@ -15,3 +15,6 @@ node_modules/
 /.env
 # The nightly archive when no S3_BUCKET is configured.
 /stake-polling-logrotate-data/
+
+# Agent worktrees made by Claude Code.
+/.claude/worktrees/

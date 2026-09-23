@@ -8,7 +8,9 @@ const state = { meta: { team: 'acme-studios' }, stale: false, ageMs: 1000, now: 
 test('the shell carries the Crash Galaxy wordmark, as a cached image rather than 23 KB inlined into every page', () => {
   const out = String(shell({ state, body: 'x', active: 'insights', title: 'Player insights' }));
   assert.match(out, /<img class="cg-logo" src="\/brand\/logo\.svg\?v=[0-9a-f]{16}" alt="Crash Galaxy"/);
-  assert.doesNotMatch(out, /<path d=/, 'the wordmark paths are no longer inlined');
+  const wordmark = LOGO_SVG.match(/<path d="([^"]{40})/)?.[1];
+  assert.ok(wordmark && !out.includes(wordmark), 'the wordmark paths are no longer inlined');
+  assert.ok(out.length < 16_000, `the shell stays small (${out.length} bytes)`);
   assert.doesNotMatch(out, /brand-mark/, 'the old lettered placeholder is gone');
 });
 
@@ -63,7 +65,9 @@ test('the document title carries the team, not a studio baked into the code', ()
 
 test('the page in use is announced as current, and the footer names the release', () => {
   const out = String(shell({ state, body: 'x', active: 'analysis', title: 'Analysis' }));
-  assert.equal((out.match(/aria-current="page"/g) ?? []).length, 1);
+  const nav = out.match(/<nav aria-label="Workspace">([\s\S]*?)<\/nav>/)[1];
+  assert.equal((nav.match(/aria-current="page"/g) ?? []).length, 1, 'one current page in the sidebar');
+  assert.match(out, /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="\/">Workspace<\/a><\/li><li aria-current="page"><b>Analysis<\/b><\/li><\/ol><\/nav>/);
   assert.match(out, /<a class="active" href="\/analysis" aria-current="page">/);
   assert.match(out, /<b class="version">v\d+\.\d+\.\d+<\/b>/);
 });

@@ -4,6 +4,7 @@ import { loadConfig } from '../src/config.mjs';
 import { keys } from '../src/store/keys.mjs';
 import { redisOptions } from '../src/store/redis.mjs';
 import { storeFor, dashboardArchive } from '../src/archive/stores.mjs';
+import { createAuth } from '../src/web/auth.mjs';
 import { readDashboard, readTrails, readSnapshot, readModeTrail, readTeamTrailSince, readSince } from '../src/store/reader.mjs';
 import { buildState } from '../src/tui/state.mjs';
 import { ApiClient } from '../src/api/client.mjs';
@@ -123,7 +124,9 @@ let archiveStore = null;
 let archiveSetupError = null;
 try { archiveStore = await storeFor(config); } catch (err) { archiveSetupError = String(err?.message ?? err); }
 const archive = dashboardArchive({ store: archiveStore, setupError: archiveSetupError, readStatus: () => readSnapshot(client, k.archiveStatus) });
-const server = createWebServer({ log, exporter, archive, version: () => dataCache.version(), pageTtlMs: periodMs(config.pollMinutes), read: async (query, hint) => {
+// Optional sign-in (src/web/auth.mjs): off until turned on from Settings.
+const auth = createAuth({ client, k });
+const server = createWebServer({ log, exporter, archive, auth, version: () => dataCache.version(), pageTtlMs: periodMs(config.pollMinutes), read: async (query, hint) => {
   const { dashboard, trails, snapshot, modeRollup, catalogue } = await readData(), now = Date.now();
   const state = buildState(dashboard, trails, now, config);
   const listings = state.rows.map(r => ({ slug: r.name, name: r.label }));
