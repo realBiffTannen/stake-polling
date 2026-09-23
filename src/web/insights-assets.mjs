@@ -138,6 +138,12 @@ tbody tr:hover{background:rgba(148,163,184,.06)}
 code{font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c7d4e5}
 .empty-state code{padding:1px 6px;border-radius:6px;background:rgba(148,163,184,.1)}
 footer{border-top-color:var(--stroke)}
+footer{flex-direction:column;gap:12px}
+.footer-row{display:flex;justify-content:space-between;gap:20px;width:100%}
+.disclaimer{margin:0;max-width:1100px;font-size:10.5px;line-height:1.6;letter-spacing:0;color:#6f7f96}
+.disclaimer b{color:#8fa0b8;font-weight:600}
+.auth-page{grid-template-rows:1fr auto;gap:18px}
+.auth-disclaimer{max-width:560px;text-align:center;align-self:end}
 footer .version{margin-left:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--stroke);color:#8fa0b8;font-weight:600;letter-spacing:.4px}
 @media(max-width:900px){:root{--header-h:52px}.sidebar{gap:14px;-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(13,18,28,.92);border-right:0;border-bottom:1px solid var(--stroke)}.sidebar .brand{flex:none}.sidebar nav{flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}.sidebar nav::-webkit-scrollbar{display:none}.sidebar nav a{flex:none;white-space:nowrap}.sidebar nav a.active::before{left:10px;right:10px;top:auto;bottom:2px;width:auto;height:2px}}
 /* ---- components (namethatui.com): header search field, breadcrumbs,

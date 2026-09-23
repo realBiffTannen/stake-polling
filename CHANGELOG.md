@@ -24,6 +24,7 @@
 - **Interface:** a command palette (Cmd/Ctrl+K or /), breadcrumbs, a mobile navigation drawer, a poll progress bar, an "On this page" scrollspy on Analysis, accordions, a timeline tape, an overflow menu, a table filter and modal dialogs.
 - **Demo site:** a static copy of the dashboard running on made-up data for twenty fictional games (`npm run demo:build`, `npm run demo:deploy`), hosted at http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/
 - **Documentation site** on GitHub Pages, plus `SECURITY.md` and `CONTRIBUTING.md`.
+- **Disclaimer** in the footer of every page and on the sign-in page: independent software, not affiliated with Engine, provided as is, not financial advice, no liability. It is repeated word for word in the README and on the docs site.
 
 ### Changed
 - Dismissed warnings are kept on the server for everyone, not in one browser.

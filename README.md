@@ -1265,6 +1265,12 @@ Installed from npm, not copied into this repository:
 
 The PDF writer, the QR encoder and every other chart are written here, with no dependency.
 
+## Disclaimer
+
+stake-polling is independent open-source software. It is not affiliated with, endorsed by or supported by Engine. It is provided "as is", without warranty of any kind, under the MIT licence. Figures are read from the Engine API for information only and may be delayed, incomplete or wrong; they are not financial, accounting, tax or legal advice. Check anything that matters against Engine's own statements. To the fullest extent the law allows, the authors, maintainers and contributors accept no liability for any loss, damage or other consequence arising from its use; you use it at your own risk.
+
+The dashboard shows the same notice in the footer of every page.
+
 ## License
 
 [MIT](LICENSE). If stake-polling earns its keep at your studio, the donation
