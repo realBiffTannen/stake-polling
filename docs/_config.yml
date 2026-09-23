@@ -1,0 +1,47 @@
+# GitHub Pages builds this folder: Settings > Pages > Deploy from a branch, /docs.
+title: stake-polling
+description: >-
+  A Node collector that polls your studio's accounting on Engine into Redis,
+  with a web dashboard, a terminal dashboard, anomaly detection and a nightly
+  archive to S3 or a local folder.
+
+remote_theme: just-the-docs/just-the-docs
+color_scheme: dark
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: false
+
+search_enabled: true
+heading_anchors: true
+
+aux_links:
+  "stake-polling on GitHub": "https://github.com/realBiffTannen/stake-polling"
+aux_links_new_tab: true
+
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub"
+gh_edit_repository: "https://github.com/realBiffTannen/stake-polling"
+gh_edit_branch: "main"
+gh_edit_source: docs
+gh_edit_view_mode: "tree"
+
+callouts:
+  note:
+    title: Note
+    color: blue
+  warning:
+    title: Warning
+    color: red
+
+# The public demo site. Pages link it as site.demo_url, never hard-coded.
+demo_url: https://DEMO-URL-PLACEHOLDER
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
