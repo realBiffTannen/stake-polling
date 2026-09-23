@@ -196,6 +196,8 @@ export const INSIGHTS_JS = `
         document.querySelectorAll('.scroll').forEach((el, i) => el.scrollLeft = positions[i] || 0);
         // The refreshed page brings every warning back; keep dismissed ones hidden.
         applyDismissed();
+        // Anything drawn client-side (charts.js) was just replaced; let it redraw.
+        document.dispatchEvent(new CustomEvent('stake:refreshed'));
         // The band under the pointer was just replaced; its readout may be out of date.
         hideTip();
         // The fragment carries a freshly computed time-to-next-poll; re-anchor

@@ -56,11 +56,11 @@ test('browser reports refresh failures while preserving data and clears the noti
   const main = { innerHTML: 'Cached figures', contains: () => false };
   const status = { hidden: true, textContent: '' };
   const document = { hidden: false, activeElement: {}, querySelector: s => s === 'main' ? main : null,
-    querySelectorAll: () => [], getElementById: () => status, addEventListener() {} };
+    querySelectorAll: () => [], getElementById: () => status, addEventListener() {}, dispatchEvent() {} };
   // By delay, not by registration order: the script registers more than one
   // interval (the poll countdown runs on its own), and "whichever came last"
   // silently captured the wrong callback the moment a second one was added.
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, performance: { now: () => 0 },
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, performance: { now: () => 0 },
     fetch: async () => ({ ok, text: async () => 'Fresh figures' }), setInterval: (fn, ms) => { if (ms === 30000) refresh = fn; } });
   await refresh();
   assert.equal(main.innerHTML, 'Cached figures');
@@ -78,10 +78,10 @@ test('a dismissed warning stays hidden in this browser, through a live refresh, 
   let notices = [notice('math-drift:aaaaaaaaaaaa'), notice('math-uncaptured:bbbbbbbbbbbb')];
   const main = { contains: () => false, set innerHTML(_) { notices = [notice('math-drift:aaaaaaaaaaaa'), notice('math-uncaptured:bbbbbbbbbbbb')]; } };
   const document = { hidden: false, activeElement: {}, querySelector: s => s === 'main' ? main : null, getElementById: () => null,
-    querySelectorAll: s => s === '[data-dismiss-key]' ? notices : [], addEventListener(type, fn) { (listeners[type] ??= []).push(fn); } };
+    querySelectorAll: s => s === '[data-dismiss-key]' ? notices : [], addEventListener(type, fn) { (listeners[type] ??= []).push(fn); }, dispatchEvent(e) { (listeners[e.type] ??= []).push(e); } };
   const store = new Map();
   const localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage,
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage,
     fetch: async () => ({ ok: true, text: async () => 'fresh' }), setInterval: (fn, ms) => { if (ms === 30000) refresh = fn; } });
   const target = notices[0];
   const button = { closest: (s) => (s === '[data-dismiss]' ? button : s === '[data-dismiss-key]' ? target : null) };
@@ -99,7 +99,7 @@ test('with browser storage blocked, dismissing still hides the warning rather th
   const document = { hidden: false, activeElement: {}, querySelector: s => (s === 'main' ? { contains: () => false } : null), getElementById: () => null,
     querySelectorAll: s => (s === '[data-dismiss-key]' ? [target] : []), addEventListener(type, fn) { (listeners[type] ??= []).push(fn); } };
   const localStorage = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); } };
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage, fetch: async () => ({}), setInterval() {} });
   const button = { closest: (s) => (s === '[data-dismiss]' ? button : s === '[data-dismiss-key]' ? target : null) };
   assert.doesNotThrow(() => listeners.click.forEach((fn) => fn({ target: button })));
   assert.equal(target.hidden, true);
@@ -124,7 +124,7 @@ function fakeTipDom() {
 
 test('hovering a chart band shows that point\'s label and every series value, as text', () => {
   const { document, body, fire, text } = fakeTipDom();
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
   const hit = { dataset: { tip: JSON.stringify({ label: '2026-09-11', rows: [{ name: '<b>players</b>', value: '1680', colour: '#38d6c4' }, { name: 'returning', value: '-', colour: '#7ddf64' }] }) } };
   fire('pointermove', { target: { closest: () => hit }, clientX: 300, clientY: 200 });
   assert.equal(body.children.length, 1, 'one tooltip, created on first use');
@@ -139,7 +139,7 @@ test('hovering a chart band shows that point\'s label and every series value, as
 
 test('the tooltip flips to stay inside the viewport at the right edge', () => {
   const { document, body, fire } = fakeTipDom();
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
   const hit = { dataset: { tip: JSON.stringify({ label: 'd', rows: [] }) } };
   fire('pointermove', { target: { closest: () => hit }, clientX: 980, clientY: 200 });
   assert.ok(parseFloat(body.children[0].style.left) + 100 <= 1000, 'right edge stays on screen');
@@ -147,7 +147,7 @@ test('the tooltip flips to stay inside the viewport at the right edge', () => {
 
 test('a malformed data-tip hides the tooltip instead of throwing', () => {
   const { document, fire } = fakeTipDom();
-  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
+  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/' }, AbortSignal, fetch: async () => ({}), setInterval() {} });
   assert.doesNotThrow(() => fire('pointermove', { target: { closest: () => ({ dataset: { tip: '{nope' } }) }, clientX: 1, clientY: 1 }));
 });
 
