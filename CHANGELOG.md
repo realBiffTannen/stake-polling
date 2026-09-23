@@ -13,6 +13,7 @@ A sleeker, more modern dashboard, built from named interface patterns
 - **Toast and hover card:** the refresh notice is a toast and chart tooltips are hover cards.
 - **Empty states and focus rings:** empty states say what to do next, and focus rings show only for keyboard use.
 - **Reduced motion:** every animation and transition stops under `prefers-reduced-motion`.
+- **Dismissible warnings:** standing warnings (math drift, games with no captured model) carry a dismiss button. The dismissal is remembered in that browser against what the warning says, so a warning that changes shows again. Live faults (sync failure, stale data, Redis memory) cannot be dismissed.
 - **Phones:** the sidebar becomes a scrollable tab bar. It used to be one unwrapped row of links wider than the screen, which pushed the whole page sideways.
 - **Version:** the release is shown in the footer and in `/healthz`.
 

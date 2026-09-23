@@ -119,6 +119,9 @@ tbody tr:hover{background:rgba(148,163,184,.06)}
 .banner{display:flex;align-items:center;gap:11px;border-bottom:1px solid transparent}
 .banner::before{content:"!";flex:none;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:800;color:var(--bg)}
 .banner.bad::before{background:#ffa0ad}.banner.warn::before{background:#f3cd8c}
+.notice[hidden]{display:none}.notice.dismissible{position:relative;padding-right:48px}
+.notice .dismiss{position:absolute;top:7px;right:8px;width:30px;height:30px;display:grid;place-items:center;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.65;font-size:19px;line-height:1;cursor:pointer}
+.notice .dismiss:hover{opacity:1;background:rgba(148,163,184,.14)}
 .banner.bad{background:linear-gradient(90deg,#3d1d28,#2a1820);border-bottom-color:rgba(255,135,150,.32)}
 .banner.warn{background:linear-gradient(90deg,#372b17,#2a2216);border-bottom-color:rgba(248,200,119,.3)}
 .banner.sticky{top:var(--header-h);z-index:35;box-shadow:0 8px 20px -12px rgba(0,0,0,.9)}
@@ -157,6 +160,25 @@ export const INSIGHTS_JS = `
     }
     setTimeout(() => { button.textContent = 'Copy'; }, 2000);
   });
+  // Standing warnings the reader has dismissed, remembered in this browser
+  // against each warning's fingerprint (views/parts.mjs dismissibleNotice), so
+  // one that changes shows again. Storage can be missing or throw (a private
+  // window, blocked site data): then a dismissal lasts until the next refresh.
+  const DISMISSED = 'stake-polling:dismissed';
+  function dismissedKeys() { try { return JSON.parse(localStorage.getItem(DISMISSED) || '[]'); } catch { return []; } }
+  function applyDismissed() {
+    const keys = dismissedKeys();
+    document.querySelectorAll('[data-dismiss-key]').forEach((el) => { if (keys.includes(el.dataset.dismissKey)) el.hidden = true; });
+  }
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest && event.target.closest('[data-dismiss]');
+    const notice = button && button.closest('[data-dismiss-key]');
+    if (!notice) return;
+    notice.hidden = true;
+    const key = notice.dataset.dismissKey;
+    try { localStorage.setItem(DISMISSED, JSON.stringify([...dismissedKeys().filter((k) => k !== key), key].slice(-50))); } catch {}
+  });
+  applyDismissed();
   const main = document.querySelector('main');
   const status = document.getElementById('refresh-status');
   let busy = false;
@@ -172,6 +194,8 @@ export const INSIGHTS_JS = `
         const positions = [...document.querySelectorAll('.scroll')].map(el => el.scrollLeft);
         main.innerHTML = await res.text();
         document.querySelectorAll('.scroll').forEach((el, i) => el.scrollLeft = positions[i] || 0);
+        // The refreshed page brings every warning back; keep dismissed ones hidden.
+        applyDismissed();
         // The band under the pointer was just replaced; its readout may be out of date.
         hideTip();
         // The fragment carries a freshly computed time-to-next-poll; re-anchor

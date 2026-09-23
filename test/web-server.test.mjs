@@ -71,6 +71,40 @@ test('browser reports refresh failures while preserving data and clears the noti
   assert.equal(status.hidden, true);
 });
 
+test('a dismissed warning stays hidden in this browser, through a live refresh, and a different one does not', async () => {
+  let refresh;
+  const listeners = {};
+  const notice = (key) => ({ hidden: false, dataset: { dismissKey: key } });
+  let notices = [notice('math-drift:aaaaaaaaaaaa'), notice('math-uncaptured:bbbbbbbbbbbb')];
+  const main = { contains: () => false, set innerHTML(_) { notices = [notice('math-drift:aaaaaaaaaaaa'), notice('math-uncaptured:bbbbbbbbbbbb')]; } };
+  const document = { hidden: false, activeElement: {}, querySelector: s => s === 'main' ? main : null, getElementById: () => null,
+    querySelectorAll: s => s === '[data-dismiss-key]' ? notices : [], addEventListener(type, fn) { (listeners[type] ??= []).push(fn); } };
+  const store = new Map();
+  const localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage,
+    fetch: async () => ({ ok: true, text: async () => 'fresh' }), setInterval: (fn, ms) => { if (ms === 30000) refresh = fn; } });
+  const target = notices[0];
+  const button = { closest: (s) => (s === '[data-dismiss]' ? button : s === '[data-dismiss-key]' ? target : null) };
+  listeners.click.forEach((fn) => fn({ target: button }));
+  assert.equal(target.hidden, true, 'hidden at once');
+  assert.deepEqual(JSON.parse(store.get('stake-polling:dismissed')), ['math-drift:aaaaaaaaaaaa']);
+  await refresh();
+  assert.equal(notices[0].hidden, true, 'the refreshed copy of the same warning stays hidden');
+  assert.equal(notices[1].hidden, false, 'a different warning is untouched');
+});
+
+test('with browser storage blocked, dismissing still hides the warning rather than throwing', () => {
+  const listeners = {};
+  const target = { hidden: false, dataset: { dismissKey: 'math-drift:aaaaaaaaaaaa' } };
+  const document = { hidden: false, activeElement: {}, querySelector: s => (s === 'main' ? { contains: () => false } : null), getElementById: () => null,
+    querySelectorAll: s => (s === '[data-dismiss-key]' ? [target] : []), addEventListener(type, fn) { (listeners[type] ??= []).push(fn); } };
+  const localStorage = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); } };
+  runInNewContext(INSIGHTS_JS, { document, URL, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage, fetch: async () => ({}), setInterval() {} });
+  const button = { closest: (s) => (s === '[data-dismiss]' ? button : s === '[data-dismiss-key]' ? target : null) };
+  assert.doesNotThrow(() => listeners.click.forEach((fn) => fn({ target: button })));
+  assert.equal(target.hidden, true);
+});
+
 // A stand-in DOM just deep enough for the chart tooltip: it records text set
 // through textContent and would throw on innerHTML, which the tooltip must
 // never use - series names come from the upstream API.

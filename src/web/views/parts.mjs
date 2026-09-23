@@ -5,10 +5,22 @@
  * from a pane that failed to render, and one of those is a symptom.
  */
 
+import { createHash } from 'node:crypto';
 import { html, raw } from '../html.mjs';
 import { usd, int, utcHm, money, DASH } from '../format.mjs';
 import { toUsd, toShareUsd, DEFAULT_MONEY } from '../../money.mjs';
 import { SPANS } from '../../insights/span.mjs';
+
+/**
+ * A standing warning the reader may dismiss - a fact that stays true until
+ * someone acts on it, not a live fault. The dismissal is remembered in this
+ * browser only (app.js), against a fingerprint of `text`: pass the warning's
+ * substance, so a warning that changes - another game drifts - shows again.
+ */
+export function dismissibleNotice(id, text, content) {
+  const key = `${id}:${createHash('sha256').update(String(text)).digest('hex').slice(0, 12)}`;
+  return html`<div class="notice warning dismissible" data-dismiss-key="${key}">${content}<button type="button" class="dismiss" data-dismiss aria-label="Dismiss this warning" title="Dismiss">×</button></div>`;
+}
 
 /** The alert every screen carries while Redis is over its memory limit, or null. */
 export function memoryAlertText(memory) {

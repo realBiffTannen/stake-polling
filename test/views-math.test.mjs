@@ -72,3 +72,15 @@ test('a game whose deployed math no longer matches math.json is flagged for reca
   const clean = String(renderMath({ model: { options: [] }, state: { ...state, modeRows: { 'pixel-geyser': [{ mode: 'BASE', cost: 1, rtp: 0.967 }] } }, math, live: ['pixel-geyser'] }));
   assert.doesNotMatch(clean, /deployed math differs/i);
 });
+
+test('the drift and no-captured-model warnings can be dismissed, keyed to what they say', () => {
+  const page = (rows, live = ['pixel-geyser']) => String(renderMath({ model: { options: [] }, state: { ...state, modeRows: { 'pixel-geyser': rows } }, math, live }));
+  const keyOf = (out, id) => out.match(new RegExp(`data-dismiss-key="(${id}:[0-9a-f]{12})"`))?.[1];
+  const one = page([{ mode: 'BASE', cost: 1, rtp: 0.955 }]);
+  assert.match(one, /<div class="notice warning dismissible" data-dismiss-key="math-drift:[0-9a-f]{12}">/);
+  assert.match(one, /<button type="button" class="dismiss" data-dismiss aria-label="Dismiss this warning"/);
+  assert.equal(keyOf(page([{ mode: 'BASE', cost: 1, rtp: 0.955 }]), 'math-drift'), keyOf(one, 'math-drift'), 'the same drift keeps its key across renders');
+  const more = page([{ mode: 'BASE', cost: 1, rtp: 0.955 }, { mode: 'BONUS9', cost: 50, rtp: 0.967 }]);
+  assert.notEqual(keyOf(more, 'math-drift'), keyOf(one, 'math-drift'), 'a new drift shows again after a dismissal');
+  assert.ok(keyOf(page([], ['pixel-geyser', 'lunar-blossom']), 'math-uncaptured'), 'the no-captured-model warning is dismissible too');
+});
