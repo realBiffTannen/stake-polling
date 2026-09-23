@@ -67,7 +67,8 @@ test('an S3 archive links each file straight to its presigned URL and says until
   const page = await (await fetch(`${base}/archive`)).text();
   assert.match(page, /S3: s3:\/\/acme-archive\/stake-polling\/acme-studios\//);
   assert.match(page, /href="https:\/\/acme-archive\.s3\.amazonaws\.com\/k\?X-Amz-Signature=abc&amp;X-Amz-Expires=3600"/);
-  assert.match(page, /<summary>Presigned URL<\/summary>/);
+  assert.doesNotMatch(page, /Presigned URL<\/summary>/, 'the Download link is the presigned URL; no second copy');
+  assert.equal((page.match(/X-Amz-Signature=abc/g) ?? []).length, 1, 'the signed URL appears once, as the link');
   assert.doesNotMatch(page, /file:\/\/|local-path/, 'an S3 archive names no local disk');
   assert.match(page, /presigned until 04:00/);
   assert.match(page, /2\.00K/);

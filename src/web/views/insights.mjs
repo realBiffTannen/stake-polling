@@ -1,5 +1,6 @@
 import { html, raw } from '../html.mjs';
-import { int, usd, pct, humanAge, money } from '../format.mjs';
+import { int, usd, usdSigned, pct, humanAge, money } from '../format.mjs';
+import { tablePdf } from '../pdf.mjs';
 import { shell } from './shell.mjs';
 
 const dateLabel = date => new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -60,9 +61,29 @@ export function renderInsights(model, state) {
       <tbody>${model.months.map(m => html`<tr><td>${m.label} ${m.complete ? null : html`<span class="tag live-tag">In progress</span>`}</td>
         <td>${int(m.players)}</td><td class="new-number">${int(m.newPlayers)}</td><td>${int(m.returningPlayers)}</td>
         <td>${usd(m.turnover)}</td><td>${signed(m.profit)}</td><td>${int(m.count)}</td></tr>`)}</tbody></table></div></section>
-  <section class="panel"><div class="section-heading"><div><h2>Daily breakdown</h2><p>Exact daily values for ${selectedName}. Most recent first.</p></div><span class="tag">UTC</span></div><div class="scroll"><table><thead><tr><th>Date</th><th>Daily players</th><th>New to game</th><th>Returning</th><th>Turnover</th><th>Studio profit</th><th>Expected share</th><th>Bets</th></tr></thead><tbody>${[...model.daily].reverse().map(r => html`<tr><td>${r.date} ${r.current ? html`<span class="tag live-tag">In progress</span>` : !r.measured ? html`<span class="tag">Not synced</span>` : null}</td><td>${int(r.players)}</td><td class="new-number">${int(r.newPlayers)}</td><td>${int(r.returningPlayers)}</td><td>${usd(r.turnover)}</td><td>${signed(r.profit)}</td><td>${usd(r.expected)}</td><td>${int(r.count)}</td></tr>`)}</tbody></table></div></section>
+  <section class="panel" id="daily-breakdown"><div class="section-heading"><div><h2>Daily breakdown</h2><p>Exact daily values for ${selectedName}. Most recent first.</p></div><div class="panel-actions"><span class="tag">UTC</span><a class="button secondary small" href="${link(model, {}, '/export.csv')}" download>CSV ↓</a><a class="button secondary small" href="${link(model, {}, '/export.pdf')}" download>PDF ↓</a></div></div><div class="scroll"><table><thead><tr><th>Date</th><th>Daily players</th><th>New to game</th><th>Returning</th><th>Turnover</th><th>Studio profit</th><th>Expected share</th><th>Bets</th></tr></thead><tbody>${[...model.daily].reverse().map(r => html`<tr><td>${r.date} ${r.current ? html`<span class="tag live-tag">In progress</span>` : !r.measured ? html`<span class="tag">Not synced</span>` : null}</td><td>${int(r.players)}</td><td class="new-number">${int(r.newPlayers)}</td><td>${int(r.returningPlayers)}</td><td>${usd(r.turnover)}</td><td>${signed(r.profit)}</td><td>${usd(r.expected)}</td><td>${int(r.count)}</td></tr>`)}</tbody></table></div></section>
   <section class="panel definitions" id="definitions"><div class="section-heading"><div><h2>A little context behind the numbers</h2><p>Know exactly what you're looking at.</p></div><span class="tag">METRIC GUIDE</span></div><div class="definition-grid"><div><h3>Daily players & player-days</h3><p>Daily players are unique within each game on a UTC calendar day. All-game totals sum those counts; they are not deduplicated people across games. Period totals are player-days, so returning on another day counts again.</p></div><div><h3>What “new” means here</h3><p>New to game is the increase in cumulative unique players since ${model.snapshot.trackingStart ?? 'the configured tracking start'}. Returning = daily players minus new. These are not new account registrations or first-ever players across the studio. Corrections that make this calculation inconsistent show a dash.</p></div><div><h3>Money & coverage</h3><p>Turnover is total bets in USD. Studio profit applies the configured ${((state.money?.profitShare ?? .1) * 100).toFixed(0)}% share; expected share uses ${((state.money?.expectedShare ?? .075) * 100).toFixed(1)}%. RTP uses gross figures. Daily history refreshes every 15 minutes. Today's date remains in progress; missing dates are excluded from period totals.</p></div></div></section>`;
   return shell({ state, body, active: 'insights', title: 'Player insights' });
+}
+
+/**
+ * The daily breakdown as a PDF: the same rows and columns as the table on the
+ * page, most recent first, with what was selected and when it was made.
+ */
+export function insightsPdf(model, { team = null, now = Date.now() } = {}) {
+  const name = model.options.find(r => r.slug === model.game)?.name ?? (model.game ? 'Unknown game' : 'All games');
+  const rows = [...model.daily].reverse().map(r => [
+    `${r.date}${r.current ? ' (in progress)' : !r.measured ? ' (not synced)' : ''}`,
+    int(r.players), int(r.newPlayers), int(r.returningPlayers), usd(r.turnover), usdSigned(r.profit), usd(r.expected), int(r.count)]);
+  return tablePdf({
+    title: 'Player insights - daily breakdown',
+    subtitle: `${name} \u00b7 ${model.from} to ${model.to} (UTC days)${team ? ` \u00b7 ${team}` : ''} \u00b7 made ${new Date(now).toISOString().slice(0, 16).replace('T', ' ')}Z`,
+    columns: [{ label: 'Date', width: 2.2 }, { label: 'Daily players', align: 'right', width: 1.2 }, { label: 'New to game', align: 'right', width: 1.2 },
+      { label: 'Returning', align: 'right', width: 1.1 }, { label: 'Turnover', align: 'right', width: 1.5 }, { label: 'Studio profit', align: 'right', width: 1.5 },
+      { label: 'Expected share', align: 'right', width: 1.5 }, { label: 'Bets', align: 'right', width: 1.1 }],
+    rows,
+    note: 'Studio profit is the studio share of gross gaming revenue. All games sums players per game, so a player of two games counts twice. A dash is a figure not synced.',
+  });
 }
 
 export function insightsCsv(model) {

@@ -29,6 +29,7 @@
     "service:uninstall": "node scripts/service.mjs uninstall",
     "service:status": "node scripts/service.mjs status",
     "enable-persistence": "node scripts/enable-persistence.mjs",
+    "auth": "node scripts/auth.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

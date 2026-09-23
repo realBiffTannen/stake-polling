@@ -13,12 +13,12 @@ A sleeker, more modern dashboard, built from named interface patterns
 - **Toast and hover card:** the refresh notice is a toast and chart tooltips are hover cards.
 - **Empty states and focus rings:** empty states say what to do next, and focus rings show only for keyboard use.
 - **Reduced motion:** every animation and transition stops under `prefers-reduced-motion`.
-- **Dismissible warnings:** standing warnings (math drift, games with no captured model) carry a dismiss button. The dismissal is remembered in that browser against what the warning says, so a warning that changes shows again. Live faults (sync failure, stale data, Redis memory) cannot be dismissed.
+- **Dismissible warnings:** standing warnings (math drift, games with no captured model) carry a dismiss button. A dismissal holds for everyone, on every browser, and Settings > System shows them again. It is tied to what the warning says, so a warning that changes shows again. Live faults (sync failure, stale data, Redis memory) cannot be dismissed.
 - **Phones:** the sidebar becomes a scrollable tab bar. It used to be one unwrapped row of links wider than the screen, which pushed the whole page sideways.
 - **Version:** the release is shown in the footer and in `/healthz`.
 
 ### Added
-- **Analysis picker:** Last 1h, 3h, 6h and 3 days alongside This month, Today and Last 24h.
+- **Analysis picker:** Last 10 min, 1h, 3h, 6h and 3 days alongside Last 24h, Today and This month, shortest first.
 - **Redis memory alert:** a sticky alert on every screen while `used_memory` is over `REDIS_DB_SIZE` (default 2GB).
 - **Authenticated Redis:** `REDIS_USERNAME`/`REDIS_PASSWORD`, or credentials in the URL. No credentials by default. Passwords are masked wherever a URL is printed.
 - **`.env`:** loaded at startup (see `.env.example`); the real environment wins over it.

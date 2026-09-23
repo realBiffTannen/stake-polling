@@ -126,7 +126,13 @@ try { archiveStore = await storeFor(config); } catch (err) { archiveSetupError =
 const archive = dashboardArchive({ store: archiveStore, setupError: archiveSetupError, readStatus: () => readSnapshot(client, k.archiveStatus) });
 // Optional sign-in (src/web/auth.mjs): off until turned on from Settings.
 const auth = createAuth({ client, k });
-const server = createWebServer({ log, exporter, archive, auth, version: () => dataCache.version(), pageTtlMs: periodMs(config.pollMinutes), read: async (query, hint) => {
+// Standing warnings dismissed for everyone - one Redis set of their keys.
+const dismissals = {
+  list: () => client.sMembers(k.dismissed),
+  add: (key) => client.sAdd(k.dismissed, key),
+  clear: () => client.del(k.dismissed),
+};
+const server = createWebServer({ log, exporter, archive, auth, dismissals, version: () => dataCache.version(), pageTtlMs: periodMs(config.pollMinutes), read: async (query, hint) => {
   const { dashboard, trails, snapshot, modeRollup, catalogue } = await readData(), now = Date.now();
   const state = buildState(dashboard, trails, now, config);
   const listings = state.rows.map(r => ({ slug: r.name, name: r.label }));
@@ -135,6 +141,8 @@ const server = createWebServer({ log, exporter, archive, auth, version: () => da
   // into it - buildState is shared with the TUI, and neither of those pages
   // exists there.
   state.math = mathModel;
+  // Standing warnings someone dismissed for everyone (views/parts.mjs).
+  state.dismissed = new Set(await dismissals.list());
   // Same reasoning for the release catalogue the trends page reads: no
   // writer populates k.catalogue yet (a later task adds one), so this is
   // `{}` today and releasedSeries() reconstructs every day from first

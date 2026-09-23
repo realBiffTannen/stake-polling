@@ -32,7 +32,7 @@ test('the picker offers this month, today and every rolling window, and marks th
   assert.match(out, /class="quick-ranges span-picker" role="group" aria-label="Time span"/);
   assert.equal((out.match(/aria-current="true"/g) ?? []).length, 1, 'one segment is current');
   const labels = [...out.matchAll(/href="\/analysis\?span=([^"]+)"[^>]*>([^<]+)</g)].map(([, key, label]) => `${key}:${label}`);
-  assert.deepEqual(labels, ['month:This month', 'today:Today', '1h:Last 1h', '3h:Last 3h', '6h:Last 6h', '24h:Last 24h', '3d:Last 3 days']);
+  assert.deepEqual(labels, ['10m:Last 10 min', '1h:Last 1h', '3h:Last 3h', '6h:Last 6h', '24h:Last 24h', '3d:Last 3 days', 'today:Today', 'month:This month'], 'shortest first');
 });
 
 test('last 1h reads the trail from an hour back, and its hourly charts name the clock hour they start at', () => {
@@ -92,7 +92,7 @@ test('nothing measured reads as nothing measured, never as zero', () => {
 });
 
 test('the analysis page renders without NaN for any span', () => {
-  for (const span of ['month', 'today', '1h', '3h', '6h', '24h', '3d']) assert.doesNotMatch(render(span), /NaN|undefined/, span);
+  for (const span of ['10m', '1h', '3h', '6h', '24h', '3d', 'today', 'month']) assert.doesNotMatch(render(span), /NaN|undefined/, span);
 });
 
 // ------------------------------------------------ derived data points
@@ -107,4 +107,18 @@ test('analysis adds hold against theory, buy economics and player worth by game,
 
 test('player worth stays on the month - players are only counted month-to-date', () => {
   assert.match(render('today'), /Player worth by game[\s\S]*month-to-date/);
+});
+
+test('players: counts in the span, their link to turnover, and each game\'s contribution - never framed as following a person', () => {
+  const P = 150_000;
+  const online = [3, 9, 4, 12, 7, 15, 5, 11];
+  const trailOf = (scale) => online.map((n, i) => ({ ts: now - (online.length - 1 - i) * P,
+    fields: { onlinePlayers: n * scale, count: 1000 + i * 50, turnover: 1e9 + online.slice(1, i + 1).reduce((a, b) => a + b * scale * 4e6, 0), profit: 5e8, unique: 200 + i } }));
+  const out = render('1h', { gameTrails: { berry: trailOf(1), 'pixel-geyser': trailOf(3) } });
+  for (const h of ['Players in this span', 'Players and turnover', 'Player contribution by game']) assert.match(out, new RegExp(`<h2>${h}</h2>`), h);
+  assert.match(out, /About \d+ players online on average in the last hour, most on Pixel Geyser/);
+  assert.match(out, /Strong positive link between players online and turnover: r = 1\.00 over 7 intervals\. Each extra player online goes with about \$4\.00 more turnover per poll\./);
+  assert.match(out, /never identifies a player/);
+  assert.match(out, /id="p-players-and-turnover"/, 'in the On this page list');
+  assert.doesNotMatch(out, /NaN|undefined/);
 });

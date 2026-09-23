@@ -207,6 +207,39 @@ catalogue, including unreleased titles. To keep it on this machine only:
 
     npm start -- --host 127.0.0.1
 
+## Signing in
+
+The dashboard is open to anyone who can reach it until you turn sign-in on:
+**Settings > Security > Require sign-in**. Choose a username and a password
+of at least 10 characters. The browser you do it from stays signed in.
+
+From then on, every page, live refresh, CSV and PDF export and archive
+download needs a session. `/healthz` and the page's own stylesheet and
+script do not, so monitors keep working and the sign-in page can load.
+Settings is also where you change the username or password (this signs every
+other browser out), sign out everywhere, or turn sign-in off again. Each of
+those asks for the current password.
+
+How it is kept safe:
+- **Passwords:** only a salted scrypt hash of the password is stored, in Redis.
+- **Sessions:** random tokens in `HttpOnly`, `SameSite=Strict` cookies. Redis holds only each token's SHA-256, with an expiry: 12 hours, or 30 days with *Keep me signed in*.
+- **Forms:** every form, including the one that turns sign-in on, carries a CSRF token and is refused from another origin. So another website cannot turn sign-in on with its own password and lock you out.
+- **Guessing:** sign-in attempts are rate-limited per address (5 wrong in 15 minutes), and an unknown username takes as long to reject as a wrong password.
+- **Redis down:** if the sign-in check cannot read Redis, the dashboard refuses rather than opening up.
+
+**Forgot the password?** On the machine running the dashboard:
+
+```bash
+npm run auth -- status     # is sign-in on, and for whom
+npm run auth -- disable    # turn it off and end every session
+```
+
+**Plain HTTP:** the dashboard serves HTTP, so on your network the password
+crosses the wire unencrypted. On a network you do not trust, bind it to this
+machine (`npm start -- --host 127.0.0.1`) and reach it over an SSH tunnel, or
+put it behind a reverse proxy that serves HTTPS. Behind a proxy that sets
+`X-Forwarded-Proto: https`, the session cookie is also marked `Secure`.
+
 ## Always on, across reboots
 
     npm run service:install      # start at login, restart after a crash
@@ -1047,18 +1080,21 @@ Usually you start this together with the collector via `npm start` (see
 **Running everything** above) rather than running `npm run web` on its own;
 either way it is the same server with the same default bind.
 
+**Getting around:** press <kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd> (or <kbd>/</kbd>) anywhere to jump to any page or game. On a phone, the menu button opens the navigation drawer. The thin bar under the header fills up towards the collector's next poll.
+
 The pages, in sidebar order:
 
 | Route | What it shows |
 |---|---|
 | `/` | **Overview.** One row per roster game (bets, turnover, studio P/L month-to-date, P/L today, online) with a total row, plus a *Not yet live* table of every catalogue title that is not turned on (status, approval stage, captured RTP / modes / max win). Simple figures only - every game name opens its game page. |
-| `/analysis` | **Analysis.** Every chart states its conclusion in a sentence computed from the same numbers: four donuts (share of bets, turnover, profit gains, profit losses by game), P/L by game, *luck or fault* noise bands, turnover concentration, feature-buy share, hour-by-hour studio P/L, bets per hour, players online, daily P/L. The picker scopes it: *This month* (the API's month-to-date), *Today* (since 00:00:00Z), or a rolling *Last 1h / 3h / 6h / 24h / 3 days* read off the trail. |
+| `/analysis` | **Analysis.** Every chart states its conclusion in a sentence computed from the same numbers: four donuts (share of bets, turnover, profit gains, profit losses by game), P/L by game, *luck or fault* noise bands, turnover concentration, feature-buy share, hour-by-hour studio P/L, bets per hour, players online, daily P/L. The picker, shortest first, scopes it: a rolling *Last 10 min / 1h / 3h / 6h / 24h / 3 days* read off the trail, *Today* (since 00:00:00Z), or *This month* (the API's month-to-date). **Players:** average and peak players online per game, players new to the month, and how turnover and bets move with the number of players online (Pearson's r and the turnover per extra player, one point per poll interval), plus each game's share of turnover against its share of players. The API never identifies a player, so these relate counts to money; they do not follow any one person. An *On this page* list follows the section you are reading on wide screens. |
 | `/settlement` | **Settlement.** Position, what Stake would settle if the month ended now (10% of summed roster profit plus carry - Stake settles on this, not on `position`), the luck gap, the month-end projection, today against the same hours of yesterday, and whether `/stats`, `/games` and the per-mode response reconcile to the cent, with endpoint freshness. |
-| `/insights` | **Player insights** (was `/`; old `/?game=…` links redirect here). Daily players, new-to-game, returning, filters and the daily CSV export. |
+| `/insights` | **Player insights** (was `/`; old `/?game=…` links redirect here). Daily players, new-to-game, returning, filters, and the daily breakdown as CSV or PDF (`/export.csv`, `/export.pdf`, same filters). |
 | `/live` | The collector's roster, possible events, running action and findings. |
 | `/trends` | Players online every poll, 30 days of bets, turnover, P/L, players, average bet and RTP, turnover by game (the legend lists every game; pick one to chart it on its own scale), and returning players against releases. |
 | `/math` | The captured math corpus (your `math.json`). |
 | `/log` | **Poll log.** Every entry the poller wrote, newest first, 100 a page, filterable by stream, exactly as stored - plus raw CSV downloads. |
+| `/settings` | **Settings.** Security (sign-in), System (Redis memory as a level meter, persistence, poll interval, archive, and showing dismissed warnings again) and About. |
 | `/archive` | **Archive.** Every day the nightly archiver has stored, with a presigned S3 download link - or, for the local directory, the file's own `file://` link and path plus a direct download - and the last run's outcome. See *Nightly archive*. |
 | `/donate` | **Donations.** The project's donation addresses, each with a copy button. |
 | `/game/<slug>` | The drilldown: bet-mode table with a total row first, then P/L by mode, bets against turnover, per-mode noise bands, hourly P/L and bets, players, captured math and verdicts. Titles that are not live get a page too, built from their captured math. |

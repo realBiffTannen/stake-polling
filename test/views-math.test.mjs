@@ -78,9 +78,17 @@ test('the drift and no-captured-model warnings can be dismissed, keyed to what t
   const keyOf = (out, id) => out.match(new RegExp(`data-dismiss-key="(${id}:[0-9a-f]{12})"`))?.[1];
   const one = page([{ mode: 'BASE', cost: 1, rtp: 0.955 }]);
   assert.match(one, /<div class="notice warning dismissible" data-dismiss-key="math-drift:[0-9a-f]{12}">/);
-  assert.match(one, /<button type="button" class="dismiss" data-dismiss aria-label="Dismiss this warning"/);
+  assert.match(one, /<form method="post" action="\/dismiss" class="dismiss-form" data-dismiss-form><!--fill:csrf-input--><!--\/fill:csrf-input--><input type="hidden" name="key" value="math-drift:[0-9a-f]{12}"><input type="hidden" name="back" value="\/math"><button type="submit" class="dismiss"/);
   assert.equal(keyOf(page([{ mode: 'BASE', cost: 1, rtp: 0.955 }]), 'math-drift'), keyOf(one, 'math-drift'), 'the same drift keeps its key across renders');
   const more = page([{ mode: 'BASE', cost: 1, rtp: 0.955 }, { mode: 'BONUS9', cost: 50, rtp: 0.967 }]);
   assert.notEqual(keyOf(more, 'math-drift'), keyOf(one, 'math-drift'), 'a new drift shows again after a dismissal');
   assert.ok(keyOf(page([], ['pixel-geyser', 'lunar-blossom']), 'math-uncaptured'), 'the no-captured-model warning is dismissible too');
+});
+
+test('a warning dismissed for everyone is not rendered at all, and a changed one is', () => {
+  const rows = [{ mode: 'BASE', cost: 1, rtp: 0.955 }];
+  const render = (dismissed) => String(renderMath({ model: { options: [] }, state: { ...state, modeRows: { 'pixel-geyser': rows }, dismissed }, math, live: ['pixel-geyser'] }));
+  const key = render(new Set()).match(/data-dismiss-key="(math-drift:[0-9a-f]{12})"/)[1];
+  assert.doesNotMatch(render(new Set([key])), /Deployed math differs/);
+  assert.match(render(new Set(['math-drift:000000000000'])), /Deployed math differs/, 'another key hides nothing');
 });

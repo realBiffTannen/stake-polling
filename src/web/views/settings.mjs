@@ -94,7 +94,8 @@ function security({ auth, csrf, flash, confirm }) {
   </section>`;
 }
 
-function system({ state, archive }) {
+function system({ state, archive, csrf }) {
+  const hiddenCount = state.dismissed?.size ?? 0;
   const m = state.redisMemory;
   const pct = m ? Math.min(100, (m.usedBytes / m.limitBytes) * 100) : null;
   return html`<section class="panel"><h2>Redis</h2>
@@ -105,6 +106,9 @@ function system({ state, archive }) {
     <h2 class="gap">Collector and archive</h2>
     <div class="setting-row"><div><h3>Poll interval</h3><p class="dim">Every endpoint is read on the clock at this interval.</p></div><span class="tag">${Number(state.pollMinutes) > 0 ? `${state.pollMinutes} min` : DASH}</span></div>
     <div class="setting-row"><div><h3>Nightly archive</h3><p class="dim">${archive?.where ? `${archive.kind === 's3' ? 'S3' : 'Local directory'}: ${archive.where}` : 'Not set up.'}</p></div><a class="button secondary" href="/archive">Open archive</a></div>
+    <h2 class="gap">Dashboard</h2>
+    <div class="setting-row"><div><h3>Dismissed warnings</h3><p class="dim">${hiddenCount ? `${hiddenCount} standing ${hiddenCount === 1 ? 'warning is' : 'warnings are'} hidden for everyone. A warning whose content changes shows again by itself.` : 'None - every standing warning is shown.'}</p></div>
+      ${hiddenCount ? html`<form method="post" action="/dismiss"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="restore" value="all"><input type="hidden" name="back" value="/settings?tab=system"><button class="button secondary" type="submit">Show them again</button></form>` : null}</div>
   </section>`;
 }
 
@@ -125,7 +129,7 @@ export function renderSettings({ state, tab, auth, csrf, flash = {}, confirm = n
       <p>Sign-in for this dashboard, and what it is running on.</p></div></div>
   <nav class="tabs" aria-label="Settings sections">${TABS.map(([key, label]) => html`<a href="/settings?tab=${key}" class="${key === current ? 'selected' : ''}"${key === current ? raw(' aria-current="page"') : null}>${label}</a>`)}</nav>
   ${ok ? html`<div class="toast" role="status" data-toast>${ok}</div>` : null}
-  ${current === 'security' ? security({ auth, csrf, flash, confirm }) : current === 'system' ? system({ state, archive }) : about({ version })}`;
+  ${current === 'security' ? security({ auth, csrf, flash, confirm }) : current === 'system' ? system({ state, archive, csrf }) : about({ version })}`;
   return shell({ state, body, active: 'settings', title: 'Settings' });
 }
 

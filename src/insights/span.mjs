@@ -20,21 +20,24 @@ import { sumSince } from '../window.mjs';
 import { parseModeField, modeOrder } from '../modes.mjs';
 import { toUsd, toShareUsd } from '../money.mjs';
 
+// In picker order: the rolling windows shortest first, then the calendar
+// spans. Ten minutes is four poll intervals at the default 2.5.
 export const SPANS = {
-  month: { label: 'This month', words: 'this month' },
-  today: { label: 'Today', words: 'today' },
+  '10m': { label: 'Last 10 min', words: 'in the last 10 minutes', hours: 1 / 6, period: '10 minutes' },
   '1h': { label: 'Last 1h', words: 'in the last hour', hours: 1, period: 'hour' },
   '3h': { label: 'Last 3h', words: 'in the last 3h', hours: 3, period: '3 hours' },
   '6h': { label: 'Last 6h', words: 'in the last 6h', hours: 6, period: '6 hours' },
   '24h': { label: 'Last 24h', words: 'in the last 24h', hours: 24, period: '24 hours' },
   '3d': { label: 'Last 3 days', words: 'in the last 3 days', hours: 72, period: '3 days' },
+  today: { label: 'Today', words: 'today' },
+  month: { label: 'This month', words: 'this month' },
 };
 
 /**
  * The spans a game page offers. Its per-mode trail is read 24 hours deep, so
  * a longer window would silently cover less than its label says.
  */
-export const GAME_SPANS = ['month', 'today', '24h'];
+export const GAME_SPANS = ['24h', 'today', 'month'];
 
 export function spanOf(param, allowed = Object.keys(SPANS)) {
   return allowed.includes(param ?? '') ? param : 'month';

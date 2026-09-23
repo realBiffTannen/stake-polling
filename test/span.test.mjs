@@ -6,7 +6,7 @@ const money = { unitsPerDollar: 1_000_000, profitShare: 0.1, expectedShare: 0.07
 const M = 60000;
 
 test('spanOf accepts every span and defaults to the month', () => {
-  assert.deepEqual(Object.keys(SPANS), ['month', 'today', '1h', '3h', '6h', '24h', '3d']);
+  assert.deepEqual(Object.keys(SPANS), ['10m', '1h', '3h', '6h', '24h', '3d', 'today', 'month'], 'shortest first');
   for (const span of Object.keys(SPANS)) assert.equal(spanOf(span), span);
   assert.equal(spanOf('nonsense'), 'month');
   assert.equal(spanOf(null), 'month');
@@ -14,7 +14,7 @@ test('spanOf accepts every span and defaults to the month', () => {
 });
 
 test('spanOf narrowed to the game page\'s spans turns anything longer back to the month', () => {
-  assert.deepEqual(GAME_SPANS, ['month', 'today', '24h']);
+  assert.deepEqual(GAME_SPANS, ['24h', 'today', 'month']);
   assert.equal(spanOf('24h', GAME_SPANS), '24h');
   assert.equal(spanOf('3d', GAME_SPANS), 'month');
   assert.equal(spanOf('1h', GAME_SPANS), 'month');
@@ -22,6 +22,7 @@ test('spanOf narrowed to the game page\'s spans turns anything longer back to th
 
 test('every rolling span starts exactly its hours back', () => {
   const now = Date.parse('2026-09-22T01:00:00Z');
+  assert.equal(spanStart('10m', now), Date.parse('2026-09-22T00:50:00Z'));
   assert.equal(spanStart('1h', now), Date.parse('2026-09-22T00:00:00Z'));
   assert.equal(spanStart('3h', now), Date.parse('2026-09-21T22:00:00Z'));
   assert.equal(spanStart('6h', now), Date.parse('2026-09-21T19:00:00Z'));

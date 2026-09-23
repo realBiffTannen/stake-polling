@@ -7,13 +7,13 @@
  *
  * The picker scopes everything that CAN be scoped: this month (the API's own
  * month-to-date), today (the trail since 00:00:00Z) or a rolling window of
- * 1, 3, 6 or 24 hours or 3 days (the trail). Two panels are fixed by what
+ * 10 minutes, 1, 3, 6 or 24 hours, or 3 days (the trail). Two panels are fixed by what
  * they are: the hour-by-hour charts need the trail, so under "this month"
  * they show the last 24 hours; and the daily P/L chart is always the month,
  * because a day does not split into days.
  */
 
-import { html } from '../html.mjs';
+import { html, raw } from '../html.mjs';
 import { int, utcHm } from '../format.mjs';
 import { formatUsd, formatUsdSigned } from '../../money.mjs';
 import { shell } from './shell.mjs';
@@ -31,6 +31,8 @@ import { html as h } from '../html.mjs';
 import { pct, usd, blank, DASH } from '../format.mjs';
 import { holdTable, holdHeadline, buyEconomics, playerWorth, quietByGame, unusualDays } from '../../insights/economics.mjs';
 import { tape, tapeHeadline, notable } from '../../insights/tape.mjs';
+import { playersByGame, playerCorrelation, contribution, playersHeadline, correlationHeadline, contributionHeadline } from '../../insights/players.mjs';
+import { scatterChart } from '../charts/scatter.mjs';
 
 const pct1 = (v) => `${Number(v).toFixed(1)}%`;
 const marginPct = (v) => `${(Number(v) * 100).toFixed(1)}%`;
@@ -103,6 +105,19 @@ export function renderAnalysis({ state, model, span = 'month' }) {
   const econRows = [...baseRows].sort(bySize).map((r) => ({ r, e: buyEconomics(modesBySlug[r.name] ?? [], money) })).filter(({ e }) => !blank(e.rounds) && e.rounds > 0);
   const worthRows = [...baseRows].sort(bySize).map((r) => ({ r, w: playerWorth(r, money) })).filter(({ w }) => !blank(w.turnoverPerPlayer));
   const quiet = quietByGame(state.gameTrails ?? {}, labels);
+  // Players, from counts only (src/insights/players.mjs). The month has no
+  // trail of its own, so under "this month" these read the last 24 hours.
+  const playerSpan = from === null ? { trails: state.gameTrails ?? {}, from: now - 86_400_000, words: 'in the last 24h' } : { trails: spanGames, from, words };
+  const playerRows = playersByGame(playerSpan.trails, { from: playerSpan.from, now, labels, money });
+  const playerLinks = playerCorrelation(playerSpan.trails, { from: playerSpan.from, now, money });
+  const contrib = contribution(playerRows);
+  const monthUnique = baseRows.filter((r) => !blank(r.unique)).reduce((a, r) => a + Number(r.unique), 0);
+  // Every interval counts toward r; the chart draws an even sample so a
+  // three-day span stays a readable, light page.
+  const step = Math.max(1, Math.ceil(playerLinks.points.length / 400));
+  const scatterPoints = playerLinks.points.filter((_, i) => i % step === 0)
+    .map((p) => ({ x: p.online, y: p.turnoverUsd, label: `${utcHm(p.ts)}Z` }));
+  const perPoll = Number(state.pollMinutes) > 0 ? `per ${Number(state.pollMinutes)} minutes` : 'per poll';
   const unusual = unusualDays(state.dailySnapshot ?? {}, { now, money });
   const costOf = (slug, mode) => (state.modeRows?.[slug] ?? []).find((r) => r.mode === mode)?.cost ?? null;
   const events = notable(tape({ gameTrails: state.gameTrails ?? {}, modeTrails: state.modeTrails ?? {}, labels, now, money }), costOf);
@@ -117,13 +132,13 @@ export function renderAnalysis({ state, model, span = 'month' }) {
       ? `Since 00:00:00Z today - ${utcHm(now)} now, so ${Math.floor((now - from) / 3_600_000)}h ${Math.floor(((now - from) % 3_600_000) / 60000)}m of play.`
       : `The rolling ${SPANS[span].period} to ${utcHm(now)}, from the collector's own trail.`;
 
-  const body = html`<div class="page-heading"><div><div class="eyebrow">WHAT THE DATA SAYS</div><h1>Analysis<span>.</span></h1>
+  const head = html`<div class="page-heading"><div><div class="eyebrow">WHAT THE DATA SAYS</div><h1>Analysis<span>.</span></h1>
       <p>Every chart states its conclusion, and every conclusion carries what it was computed from.</p></div></div>
   <div class="scope-line"><span>${spanPicker('/analysis', span)}</span><span>${scope}</span></div>
   ${gap === 'none' ? html`<div class="notice warning">No trail has been recorded yet, so nothing in this span can be measured.</div>`
-    : gap ? html`<div class="notice warning">The trail only reaches back to ${utcHm(gap)}; figures cover from then, not the whole span.</div>` : null}
+    : gap ? html`<div class="notice warning">The trail only reaches back to ${utcHm(gap)}; figures cover from then, not the whole span.</div>` : null}`;
 
-  <div class="donut-grid">
+  const panels = html`<div class="donut-grid">
     ${panel('Share of bets', sets.bets.headline, ring(sets.bets, 'Bets by game', (v) => int(v), compact(sets.bets.total)))}
     ${panel('Share of turnover', sets.turnover.headline, ring(sets.turnover, 'Turnover by game', (v) => formatUsd(v), compact(sets.turnover.total, '$')))}
     ${panel('Profit gains', sets.gains.headline, ring(sets.gains, 'Studio profit, games that were up', (v) => formatUsd(v), compact(sets.gains.total, '+$')))}
@@ -157,6 +172,21 @@ export function renderAnalysis({ state, model, span = 'month' }) {
         <td>${usdOrDash(w.turnoverPerPlayer)}</td><td>${blank(w.roundsPerPlayer) ? DASH : int(w.roundsPerPlayer)}</td><td>${signedOrDash(w.studioPerPlayer)}</td><td>${signedOrDash(w.studioPer1kRounds)}</td></tr>`)}</tbody></table></div>`,
     'Always this month, whatever span is picked: the API only counts players month-to-date, per game.')}
 
+  ${panel('Players in this span', playersHeadline(playerRows, { words: playerSpan.words }),
+    hbars({ rows: playerRows.filter((r) => !blank(r.avgOnline)).sort((a, b) => b.avgOnline - a.avgOnline).map((r) => ({ key: r.slug, label: r.label, value: r.avgOnline })),
+      tone: 'neutral', format: (v) => Number(v).toFixed(1), title: 'Average players online' }),
+    `Players online is a head count at each poll, not distinct players.${span === 'month' ? ' Under This month it reads the last 24 hours of the trail.' : ''}${monthUnique > 0 ? ` This month the API counts ${int(monthUnique)} players across games (a player of two games counts twice).` : ''}`)}
+
+  ${panel('Players and turnover', correlationHeadline(playerLinks, { intervalWords: perPoll }),
+    playerLinks.points.length ? scatterChart({ points: scatterPoints, xLabel: 'Players online', yLabel: `Turnover ${perPoll} ($)`, fit: true, title: 'Players online against turnover, one dot per poll interval' }) : null,
+    `One dot per poll interval${step > 1 ? ` (every ${step}th of ${int(playerLinks.points.length)} drawn; r uses them all)` : ''}. The API never identifies a player, so this relates how many were on to what was staked - it does not follow any one player, and a link is not a cause.`)}
+
+  ${panel('Player contribution by game', contributionHeadline(contrib), contrib.length ? h`<div class="scroll"><table><thead><tr><th>Game</th><th>Avg online</th><th>Peak</th><th>New this month</th><th>Share of players</th><th>Share of turnover</th><th>Share of bets</th><th>Contribution</th></tr></thead>
+      <tbody>${contrib.map((r) => h`<tr><td class="label-cell"><a class="game-link" href="/game/${encodeURIComponent(r.slug)}">${r.label}</a></td>
+        <td>${Number(r.avgOnline).toFixed(1)}</td><td>${int(r.peakOnline)}</td><td>${int(r.newPlayers)}</td><td>${pctOrDash(r.playerShare)}</td><td>${pctOrDash(r.turnoverShare)}</td><td>${pctOrDash(r.betShare)}</td>
+        <td class="${r.index === null ? '' : r.index >= 1 ? 'good' : 'dim'}">${r.index === null ? DASH : `${r.index.toFixed(2)}x`}</td></tr>`)}</tbody></table></div>` : null,
+    'Contribution is a game\'s share of turnover over its share of players online: above 1x, its players stake more than their numbers alone would suggest.')}
+
   ${panel('Quiet share', quiet.headline, hbars({ rows: quiet.bars, tone: 'neutral', format: pct1, title: 'Share of turnover taken with two or fewer players online' }),
     'Last 24h of the trail. A game that takes most of its money with almost nobody on is living on a few big players.')}
 
@@ -164,7 +194,7 @@ export function renderAnalysis({ state, model, span = 'month' }) {
       <div><b>${u.name ?? u.slug}</b> on ${u.date}: ${u.kind === 'both' ? 'stakes and players' : u.kind} at ${Number(u.ratio).toFixed(1)}x its median${blank(u.turnover) ? '' : ` (${usd(u.turnover)} turnover)`}</div></li>`)}</ul>` : null,
     'A day at three times the median of that game\'s previous 14 active days, with at least five days to compare, $400 and 900 rounds of floor. Launch days and today are excluded.')}
 
-  ${panel('The tape', tapeHeadline(events), events.length ? h`<ul class="list">${events.slice(0, 40).map((e) => h`<li class="${e.kind === 'payout_spike' ? 'warn' : ''}">
+  ${panel('The tape', tapeHeadline(events), events.length ? h`<ul class="list timeline">${events.slice(0, 40).map((e) => h`<li class="${e.kind === 'payout_spike' ? 'warn' : ''}">
       <div>${e.message}</div><div class="dim">${new Date(e.ts).toISOString().slice(11, 16)}Z · ${e.label ?? e.slug} · ${e.kind.replace('_', ' ')}</div></li>`)}</ul>
       ${events.length > 40 ? h`<p class="dim">${int(events.length - 40)} more - every interval is in the poll log.</p>` : null}` : null,
     'Always the last 24h. Big stake: $500+ in one poll interval at $10+ a spin. Payout spike: a player won $250+ net and 5x+ the stake. House take: the house kept $250+. Exact stake: one feature buy alone in an interval, so its price is exact.')}
@@ -186,12 +216,17 @@ export function renderAnalysis({ state, model, span = 'month' }) {
   ${panel('Daily P/L this month', dailyPnl(daily).headline, columns({ rows: daily.map((d) => ({ label: d.date.slice(8), tipLabel: d.date, value: d.profit })),
     tone: 'sign', format: formatUsdSigned, title: 'Studio P/L per day' }), 'Always the calendar month - a day does not split into days. Today is still filling.')}
 
-  <section class="panel definitions"><div class="section-heading"><h2>How to read these</h2></div>
-    <div class="definition-grid">
-      <div><h3>The picker</h3><p>This month is what the API reports month-to-date. Today is the change since 00:00:00Z, so at 01:00Z it holds one hour. Last 1h, 3h, 6h, 24h and 3 days are rolling windows ending now. Everything but This month is read from the collector's trail, which samples every ${Number(state.pollMinutes) > 0 ? `${Number(state.pollMinutes)} minutes` : 'poll'} on the clock, starting at 00:00Z.</p></div>
-      <div><h3>Money</h3><p>Studio P/L is ${Math.round((money?.profitShare ?? 0.1) * 100)}% of gross gaming revenue. Margins and RTP use the gross figures. A game with no reading shows a dash and is left out of every total.</p></div>
-      <div><h3>Noise</h3><p>A month of play can sit tens of points from a game's edge by variance alone. Only a margin outside its ±2 standard-error band is called out, and even then it is a prompt to look, not proof of a fault.</p></div>
+  <section class="panel definitions" id="how-to-read"><div class="section-heading"><h2>How to read these</h2></div>
+    <div class="accordion-group">
+      <details class="accordion" id="def-picker"><summary>The picker</summary><p>This month is what the API reports month-to-date. Today is the change since 00:00:00Z, so at 01:00Z it holds one hour. Last 10 min, 1h, 3h, 6h, 24h and 3 days are rolling windows ending now. Everything but This month is read from the collector's trail, which samples every ${Number(state.pollMinutes) > 0 ? `${Number(state.pollMinutes)} minutes` : 'poll'} on the clock, starting at 00:00Z.</p></details>
+      <details class="accordion" id="def-money"><summary>Money</summary><p>Studio P/L is ${Math.round((money?.profitShare ?? 0.1) * 100)}% of gross gaming revenue. Margins and RTP use the gross figures. A game with no reading shows a dash and is left out of every total.</p></details>
+      <details class="accordion" id="def-noise"><summary>Noise</summary><p>A month of play can sit tens of points from a game's edge by variance alone. Only a margin outside its ±2 standard-error band is called out, and even then it is a prompt to look, not proof of a fault.</p></details>
     </div></section>`;
+
+  // "On this page", built from the panels as rendered, so it cannot drift from them.
+  const sections = [...String(panels).matchAll(/<section class="panel[^"]*" id="([^"]+)"><div class="section-heading">(?:<div>)?<h2>([^<]+)<\/h2>/g)];
+  const toc = html`<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ol>${sections.map(([, id, title]) => html`<li><a href="#${id}">${raw(title)}</a></li>`)}</ol></nav>`;
+  const body = html`${head}<div class="with-toc"><div class="toc-main">${panels}</div>${toc}</div>`;
 
   return shell({ state, body, active: 'analysis', title: 'Analysis' });
 }

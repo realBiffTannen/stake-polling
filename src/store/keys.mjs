@@ -25,6 +25,8 @@ export function keys(team) {
     auth: `${ns}:auth`,
     authEpoch: `${ns}:auth:epoch`,
     session: (hash) => `${ns}:session:${hash}`,
+    // Standing warnings dismissed for everyone (web views/parts.mjs).
+    dismissed: `${ns}:dismissed`,
     // The nightly archive's last run, for the archive page (src/archive).
     archiveStatus: `${ns}:archive:status`,
     roster: `${ns}:roster:latest`,

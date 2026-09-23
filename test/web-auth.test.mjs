@@ -20,7 +20,8 @@ const snapshot = { trackingStart: '2026-07-24', days: {}, cumulative: {} };
 async function setup(t) {
   await client.flushDb();
   const auth = createAuth({ client, k });
-  const server = createWebServer({ auth, read: async (query) => ({ model: buildInsights({ snapshot, now, query }),
+  const dismissals = { list: () => client.sMembers(k.dismissed), add: (key) => client.sAdd(k.dismissed, key), clear: () => client.del(k.dismissed) };
+  const server = createWebServer({ auth, dismissals, read: async (query) => ({ model: buildInsights({ snapshot, now, query }),
     state: { now, meta: { team: 'acme-studios' }, rows: [{ name: 'berry', label: 'Berry' }], ageMs: 1000, lastOk: now - 1000, pollMinutes: 2.5 } }),
     exporter: async () => ({ filename: 'x.csv', chunks: ['a,b\r\n'] }) });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -151,4 +152,31 @@ test('with Redis unreadable the sign-in check fails closed', async (t) => {
   const base = `http://127.0.0.1:${server.address().port}`;
   assert.equal((await fetch(base + '/analysis')).status, 503);
   assert.equal((await fetch(base + '/app.css')).status, 200, 'static files never depend on it');
+});
+
+test('a warning is dismissed for everyone only with this page\'s token, and while sign-in is on only by someone signed in', { skip }, async (t) => {
+  const { get, post, base, auth } = await setup(t);
+  await get('/insights');
+  const key = 'math-drift:0123456789ab';
+  assert.equal((await post('/dismiss', { key, back: '/math' })).headers.get('location'), '/math');
+  assert.deepEqual(await client.sMembers(k.dismissed), [key]);
+  const quiet = await post('/dismiss', { key: 'math-uncaptured:0123456789ab' }, { accept: 'application/json' });
+  assert.equal(quiet.status, 204, 'the in-place path gets no redirect');
+  assert.equal((await post('/dismiss', { key, csrf: 'forged-forged-forged' })).status, 403);
+  assert.equal((await post('/dismiss', { key: 'bogus key <script>' })).status, 400);
+  assert.equal((await post('/dismiss', { restore: 'all', back: '/settings?tab=system' })).headers.get('location'), '/settings?tab=system');
+  assert.deepEqual(await client.sMembers(k.dismissed), [], 'shown again for everyone');
+  await auth.enable({ username: 'ops', password: PW, confirm: PW });
+  const anon = await fetch(base + '/dismiss', { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: base }, body: new URLSearchParams({ key }) });
+  assert.equal(anon.status, 401);
+});
+
+test('the referrer policy lets a same-origin form POST carry its origin, and still sends nothing to other sites', async (t) => {
+  // Under "no-referrer" browsers send "Origin: null" on form submissions,
+  // which the CSRF check refuses - every real sign-in form would fail.
+  const server = createWebServer({ read: async () => ({ model: buildInsights({ snapshot, now, query: new URLSearchParams() }), state: { now, meta: {}, rows: [], ageMs: 1 } }) });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }));
+  const res = await fetch(`http://127.0.0.1:${server.address().port}/insights`);
+  assert.equal(res.headers.get('referrer-policy'), 'same-origin');
 });

@@ -121,3 +121,18 @@ test('guessing the current password on the settings actions is rate-limited too'
   assert.equal((await auth.disable({ current: PW, ip: 'd' })).error, 'rate');
   assert.deepEqual(await auth.status(), { enabled: true, username: 'ops' });
 });
+
+test('npm run auth -- disable turns sign-in off from the machine and ends every session', { skip }, async () => {
+  const { spawnSync } = await import('node:child_process');
+  const auth = await fresh();
+  const s = await auth.enable({ username: 'ops', password: PW, confirm: PW });
+  const env = { ...process.env, STAKE_TEAM: 'auth-test-team', STAKE_LIFETIME_START: '2026-07-24', REDIS_URL: `redis://127.0.0.1:6379/${DB}` };
+  const run = (cmd) => spawnSync(process.execPath, ['scripts/auth.mjs', cmd], { env, encoding: 'utf8' });
+  assert.match(run('status').stdout, /Sign-in is on, for username "ops"/);
+  const off = run('disable');
+  assert.equal(off.status, 0, off.stderr);
+  assert.match(off.stdout, /Sign-in is off/);
+  assert.deepEqual(await auth.status(), { enabled: false, username: null });
+  assert.equal(await auth.sessionUser(s.token), null);
+  assert.equal(run('nonsense').status, 1);
+});

@@ -71,38 +71,37 @@ test('browser reports refresh failures while preserving data and clears the noti
   assert.equal(status.hidden, true);
 });
 
-test('a dismissed warning stays hidden in this browser, through a live refresh, and a different one does not', async () => {
-  let refresh;
+function dismissHarness(fetchImpl) {
   const listeners = {};
-  const notice = (key) => ({ hidden: false, dataset: { dismissKey: key } });
-  let notices = [notice('math-drift:aaaaaaaaaaaa'), notice('math-uncaptured:bbbbbbbbbbbb')];
-  const main = { contains: () => false, set innerHTML(_) { notices = [notice('math-drift:aaaaaaaaaaaa'), notice('math-uncaptured:bbbbbbbbbbbb')]; } };
-  const document = { hidden: false, activeElement: {}, querySelector: s => s === 'main' ? main : null, getElementById: () => null,
-    querySelectorAll: s => s === '[data-dismiss-key]' ? notices : [], addEventListener(type, fn) { (listeners[type] ??= []).push(fn); }, dispatchEvent(e) { (listeners[e.type] ??= []).push(e); } };
-  const store = new Map();
-  const localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
-  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage,
-    fetch: async () => ({ ok: true, text: async () => 'fresh' }), setInterval: (fn, ms) => { if (ms === 30000) refresh = fn; } });
-  const target = notices[0];
-  const button = { closest: (s) => (s === '[data-dismiss]' ? button : s === '[data-dismiss-key]' ? target : null) };
-  listeners.click.forEach((fn) => fn({ target: button }));
-  assert.equal(target.hidden, true, 'hidden at once');
-  assert.deepEqual(JSON.parse(store.get('stake-polling:dismissed')), ['math-drift:aaaaaaaaaaaa']);
-  await refresh();
-  assert.equal(notices[0].hidden, true, 'the refreshed copy of the same warning stays hidden');
-  assert.equal(notices[1].hidden, false, 'a different warning is untouched');
+  const notice = { hidden: false };
+  const form = { action: '/dismiss', matches: (sel) => sel === 'form[data-dismiss-form]', closest: (sel) => (sel === '[data-dismiss-key]' ? notice : null) };
+  const status = { hidden: true, textContent: '' };
+  const document = { hidden: false, activeElement: {}, querySelector: s => (s === 'main' ? { contains: () => false } : null), getElementById: () => status,
+    querySelectorAll: () => [], addEventListener(type, fn) { (listeners[type] ??= []).push(fn); }, dispatchEvent() {} };
+  const calls = [];
+  class FormData { constructor() { return [['csrf', 'tok-tok-tok-tok-tok'], ['key', 'math-drift:aaaaaaaaaaaa'], ['back', '/math']]; } }
+  runInNewContext(INSIGHTS_JS, { document, URL, URLSearchParams, FormData, CustomEvent, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 },
+    setTimeout: () => 0, fetch: async (url, opts) => { calls.push([url, opts]); return fetchImpl(); }, setInterval() {} });
+  const submit = () => Promise.all(listeners.submit.map((fn) => fn({ target: form, preventDefault() {} })));
+  return { notice, status, calls, submit };
+}
+
+test('dismissing a warning posts it to the server for everyone and hides it in place', async () => {
+  const h = dismissHarness(async () => ({ ok: true, status: 204 }));
+  await h.submit();
+  assert.equal(h.notice.hidden, true);
+  const [url, opts] = h.calls[0];
+  assert.equal(url, '/dismiss');
+  assert.equal(opts.method, 'POST');
+  assert.equal(String(opts.body), 'csrf=tok-tok-tok-tok-tok&key=math-drift%3Aaaaaaaaaaaaa&back=%2Fmath');
 });
 
-test('with browser storage blocked, dismissing still hides the warning rather than throwing', () => {
-  const listeners = {};
-  const target = { hidden: false, dataset: { dismissKey: 'math-drift:aaaaaaaaaaaa' } };
-  const document = { hidden: false, activeElement: {}, querySelector: s => (s === 'main' ? { contains: () => false } : null), getElementById: () => null,
-    querySelectorAll: s => (s === '[data-dismiss-key]' ? [target] : []), addEventListener(type, fn) { (listeners[type] ??= []).push(fn); } };
-  const localStorage = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); } };
-  runInNewContext(INSIGHTS_JS, { document, URL, CustomEvent, location: { href: 'http://localhost/math' }, AbortSignal, performance: { now: () => 0 }, localStorage, fetch: async () => ({}), setInterval() {} });
-  const button = { closest: (s) => (s === '[data-dismiss]' ? button : s === '[data-dismiss-key]' ? target : null) };
-  assert.doesNotThrow(() => listeners.click.forEach((fn) => fn({ target: button })));
-  assert.equal(target.hidden, true);
+test('a dismissal the server did not save brings the warning back and says so', async () => {
+  const h = dismissHarness(async () => ({ ok: false, status: 403 }));
+  await h.submit();
+  assert.equal(h.notice.hidden, false, 'not saved, so not hidden');
+  assert.equal(h.status.hidden, false);
+  assert.match(h.status.textContent, /Could not dismiss/);
 });
 
 // A stand-in DOM just deep enough for the chart tooltip: it records text set
@@ -528,4 +527,20 @@ test('the trends page asks for the studio\'s 7-day history, a game page for its 
   assert.equal(hints.at(-1).history, 'berry');
   await fetch(base + '/analysis');
   assert.equal(hints.at(-1).history, null);
+});
+
+test('the daily breakdown exports as CSV and as PDF, for the same selection', async t => {
+  const base = await setup(t);
+  const page = await (await fetch(base + '/insights?from=2026-09-17&to=2026-09-17&game=berry')).text();
+  const panel = page.slice(page.indexOf('id="daily-breakdown"'));
+  assert.match(panel, /href="\/export\.csv\?from=2026-09-17&amp;to=2026-09-17&amp;game=berry[^"]*" download>CSV ↓/);
+  assert.match(panel, /href="\/export\.pdf\?from=2026-09-17&amp;to=2026-09-17&amp;game=berry[^"]*" download>PDF ↓/);
+  const pdf = await fetch(base + '/export.pdf?from=2026-09-17&to=2026-09-17&game=berry');
+  assert.equal(pdf.status, 200);
+  assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+  assert.equal(pdf.headers.get('content-disposition'), 'attachment; filename="player-insights-2026-09-17-to-2026-09-17.pdf"');
+  const body = await pdf.text();
+  assert.ok(body.startsWith('%PDF-1.4'));
+  assert.match(body, /\(2026-09-17 \\\(in progress\\\)\) Tj/, 'the row, its parentheses escaped for PDF');
+  assert.match(body, /\(\$100\.00\) Tj/, 'turnover, formatted as on the page');
 });

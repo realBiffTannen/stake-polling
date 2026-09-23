@@ -17,6 +17,7 @@ import { lineChart } from '../charts/line.mjs';
 import { MODE_COLOURS } from '../svg.mjs';
 import { totalsOf } from '../../tui/state.mjs';
 import { spanPicker, chartPanel } from './parts.mjs';
+import { ICONS } from './icons.mjs';
 import { SPANS, GAME_SPANS, spanStart, modeRowsOver } from '../../insights/span.mjs';
 import { pnlByMode, modeMix, modeBands, bandHeadline, hourlySeries, pnlTrend, betsTrend } from '../../insights/conclusions.mjs';
 import { hbars, pairedBars, bandChart } from '../charts/hbars.mjs';
@@ -115,10 +116,11 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
 
   const heading = html`<div class="page-heading"><div><div class="eyebrow">GAME</div><h1>${name}<span>.</span></h1>
       <p>${notLive ? 'Captured math for a title that is not live yet.' : 'Bet modes first, then captured math against observed play. Month-to-date figures run from the 1st at 00:00Z.'}</p></div>
-    ${notLive ? null : html`<a class="button secondary" href="/game/${encodeURIComponent(slug)}/buckets">Bucket cadence ↗</a>
-    <a class="button secondary" href="/insights?game=${encodeURIComponent(slug)}">Player insights ↗</a>
-    <a class="button secondary" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}`, date: today })}">Raw CSV today ↓</a>
-    <a class="button secondary" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}:modes`, date: today })}">Modes CSV today ↓</a>`}</div>`;
+    ${notLive ? null : html`<div class="heading-actions"><a class="button secondary" href="/game/${encodeURIComponent(slug)}/buckets">Bucket cadence ↗</a>
+    <details class="overflow"><summary class="button secondary" aria-label="More actions" title="More actions">${ICONS.more}</summary>
+      <div class="menu" role="menu"><a role="menuitem" href="/insights?game=${encodeURIComponent(slug)}">Player insights ↗</a>
+      <a role="menuitem" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}`, date: today })}">Raw CSV today ↓</a>
+      <a role="menuitem" href="/export/log.csv?${new URLSearchParams({ source: `ts:${slug}:modes`, date: today })}">Modes CSV today ↓</a></div></details></div>`}</div>`;
 
   const modesPanel = html`<section class="panel"><div class="section-heading"><div><h2>Bet modes</h2>
       <p>${notLive ? 'The modes in the captured math model. Nothing has been played, so every observed figure is a dash.'

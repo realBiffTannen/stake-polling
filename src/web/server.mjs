@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { pipeline } from 'node:stream/promises';
 import { gzipSync } from 'node:zlib';
 import { html } from './html.mjs';
-import { renderInsights, insightsCsv } from './views/insights.mjs';
+import { renderInsights, insightsCsv, insightsPdf } from './views/insights.mjs';
 import { shell, documentFor, polledText } from './views/shell.mjs';
 import { STATIC } from './static.mjs';
 import { createPageCache } from './page-cache.mjs';
@@ -32,11 +32,15 @@ import { VERSION } from '../version.mjs';
 import { gameModel } from '../math/checks.mjs';
 
 // The only routes that take a POST: every other route is read-only.
-const POST_ROUTES = new Set(['/login', '/logout', '/settings/auth']);
+const POST_ROUTES = new Set(['/login', '/logout', '/settings/auth', '/dismiss']);
+const DISMISS_KEY = /^[a-z][a-z-]{0,40}:[0-9a-f]{12}$/;
 
 const HEADERS = {
   'content-security-policy': "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-  'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
+  // same-origin, not no-referrer: under no-referrer a browser sends "Origin: null"
+  // on a form POST, and the CSRF check (http-auth.mjs) refuses a null origin.
+  // Nothing is sent to other sites either way.
+  'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'cache-control': 'no-store',
 };
 
 /**
@@ -122,7 +126,7 @@ const COMPRESSIBLE = /^(text\/|application\/json|image\/svg\+xml)/;
  * poll - are fills, recomputed on every serve (see fills.mjs). `warm(paths)`
  * renders pages into the cache ahead of the first visitor after a tick.
  */
-export function createWebServer({ read, log = null, exporter = null, archive = null, auth = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
+export function createWebServer({ read, log = null, exporter = null, archive = null, auth = null, dismissals = null, version = () => null, now = Date.now, pageTtlMs = 150_000 }) {
   const pages = createPageCache({ max: 200, ttlMs: pageTtlMs, now });
 
   // Everything behind the static files: one rendered response, never touched
@@ -131,7 +135,7 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
     const page = (body, title, state) => ({ status: 200, type: 'text/html; charset=utf-8',
       body: String(url.searchParams.get('fragment') === '1' ? body : documentFor({ body, title, team: state?.meta?.team ?? null })), state });
     const text = (status, message, extra = {}) => ({ status, type: 'text/plain', body: message, headers: extra });
-    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/archive', '/export.csv', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
+    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/archive', '/export.csv', '/export.pdf', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
     if (url.pathname === '/log' && !log) return text(404, 'Page not found');
     if (url.pathname === '/archive' && !archive) return text(404, 'Page not found');
     if (url.pathname === '/' && INSIGHTS_PARAMS.some(p => url.searchParams.has(p))) return text(302, '', { location: `/insights?${url.searchParams}` });
@@ -167,6 +171,10 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
       if (url.pathname === '/donate') return page(renderDonate({ state }), 'Donations', state);
       if (url.pathname === '/math') return page(renderMath({ model, state, math: state.math ?? {}, live: state.liveSlugs ?? [] }), 'Game math', state);
       if (url.pathname === '/export.csv') return { status: 200, type: 'text/csv; charset=utf-8', body: insightsCsv(model), headers: { 'content-disposition': 'attachment; filename="player-insights.csv"' } };
+      if (url.pathname === '/export.pdf') {
+        const name = `player-insights-${model.from}-to-${model.to}.pdf`.replace(/[^\w.-]/g, '_');
+        return { status: 200, type: 'application/pdf', body: insightsPdf(model, { team: state?.meta?.team ?? null, now: now() }), headers: { 'content-disposition': `attachment; filename="${name}"` } };
+      }
       if (url.pathname === '/analysis') return page(renderAnalysis({ state, model, span: spanOf(url.searchParams.get('span')) }), 'Analysis', state);
       if (url.pathname === '/settlement') {
         // Reconciles one upstream endpoint against another, so it reads the
@@ -222,6 +230,7 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
     countdown: () => countdownHtml(now(), entry.pollMinutes),
     pollbar: () => pollBarHtml(now(), entry.pollMinutes),
     viewer: () => viewerMenu(viewer),
+    'csrf-input': () => String(html`<input type="hidden" name="csrf" value="${viewer?.csrf ?? ''}">`),
   });
 
   const server = createServer(async (req, res) => {
@@ -294,6 +303,21 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
         const result = await auth.login({ username: form.get('username') ?? '', password: form.get('password') ?? '', keep: form.get('keep') === '1', ip });
         if (result.error) return redirect(`/login?error=${result.error}&next=${encodeURIComponent(next)}`);
         return redirect(next, [sessionCookie(result)]);
+      }
+      if (url.pathname === '/dismiss') {
+        // A standing warning dismissed for everyone (views/parts.mjs), or
+        // every dismissed warning shown again (restore=all, from Settings).
+        const wantsJson = /application\/json/.test(req.headers.accept ?? '');
+        if (!dismissals) return send(404, 'Page not found', 'text/plain');
+        if (viewer.enabled && !viewer.user) return send(401, 'Sign in required.', 'text/plain');
+        if (!valid) return send(403, 'The form expired. Reload the page and try again.', 'text/plain');
+        const key = String(form.get('key') ?? '');
+        if (form.get('restore') === 'all') await dismissals.clear();
+        else if (DISMISS_KEY.test(key)) await dismissals.add(key);
+        else return send(400, 'Unknown warning.', 'text/plain');
+        pages.clear();
+        if (wantsJson) { res.writeHead(204, HEADERS); return res.end(); }
+        return redirect(safeNext(form.get('back')));
       }
       if (url.pathname === '/logout') {
         if (!valid) return send(403, 'The form expired. Reload the page and try again.', 'text/plain');
