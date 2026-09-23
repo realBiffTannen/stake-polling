@@ -280,6 +280,27 @@ meter.level::-moz-meter-bar{background:var(--mint);border-radius:999px}
 .accordion summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:rotate(45deg);transition:transform .2s var(--ease);margin-right:6px}
 .accordion[open] summary::after{transform:rotate(-135deg)}
 .accordion summary:hover{color:var(--text)}
+.fold>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:0 16px;cursor:pointer;list-style:none;padding:0}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary h2{font-size:14px;grid-column:1}
+.fold>summary .conclusion{display:block;grid-column:1}
+.fold>summary .fold-arrow{grid-column:2;grid-row:1;width:9px;height:9px;margin:5px 8px 0 0;border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:rotate(45deg);transition:transform .2s var(--ease),border-color .16s var(--ease)}
+.fold>summary:hover .fold-arrow{border-color:var(--text)}
+.fold[open]>summary{margin-bottom:22px}
+.fold[open]>summary .fold-arrow{transform:rotate(-135deg);margin-top:9px}
+.fold-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:12px 0 2px;font-size:12px;color:var(--dim)}
+.fold-more>summary::-webkit-details-marker{display:none}
+.fold-more>summary::after{content:"";width:7px;height:7px;margin-top:-3px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .2s var(--ease)}
+.fold-more[open]>summary::after{transform:rotate(-135deg);margin-top:3px}
+.fold-more>summary:hover{color:var(--text)}
+.fold-more .when-open{display:none}
+.fold-more[open] .when-open{display:inline}
+.fold-more[open] .when-closed{display:none}
+.stars{color:#f5c542;letter-spacing:1px;font-size:14px;white-space:nowrap}
+.stars-off{color:rgba(148,163,184,.28)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;line-height:1.5;border:1px solid var(--stroke-strong);color:var(--dim);white-space:nowrap}
+.pill.live{color:var(--mint);border-color:rgba(134,225,196,.4);background:rgba(134,225,196,.08)}
+.engine-link{color:var(--link);white-space:nowrap}
 .accordion p{padding:0 2px 16px;font-size:12px;line-height:1.8;color:#8fa0b8;max-width:900px}
 .timeline{position:relative;padding-left:22px}
 .timeline::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;border-radius:2px;background:linear-gradient(180deg,rgba(134,225,196,.5),rgba(148,163,184,.12))}

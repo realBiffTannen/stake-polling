@@ -88,13 +88,26 @@ export function dataTable({ columns, rows }) {
   </table></div>`;
 }
 
-export function findingsList(alerts) {
+/**
+ * The newest `limit` entries as a list, the rest behind a fold that starts
+ * shut. Entries arrive newest first (the reader's xRevRange) and keep that
+ * order on both sides of the fold. The fold carries an id so app.js keeps it
+ * open through a live refresh.
+ */
+function recentList(items, { limit, id, render }) {
+  const shown = items.slice(0, limit);
+  const rest = items.slice(limit);
+  const list = (entries) => html`<ul class="list">${entries.map(render)}</ul>`;
+  return html`${list(shown)}${rest.length ? html`<details class="fold-more" id="${id}"><summary><span class="when-closed">Show ${int(rest.length)} more</span><span class="when-open">Show fewer</span></summary>${list(rest)}</details>` : null}`;
+}
+
+export function findingsList(alerts, { limit = 5, id = 'findings-more' } = {}) {
   if (!alerts?.length) return html`<p class="dim">no findings</p>`;
-  return html`<ul class="list">${alerts.map((a) => html`
+  return recentList(alerts, { limit, id, render: (a) => html`
     <li class="${a.severity ?? ''}">
       <div>${a.message ?? `${a.game ?? ''} ${a.metric ?? ''} ${a.kind ?? ''}`}</div>
       <div class="dim">${utcHm(a.ts)} ${a.severity ?? ''} ${a.game ?? ''}</div>
-    </li>`)}</ul>`;
+    </li>` });
 }
 
 export function eventsList(events) {
@@ -110,9 +123,9 @@ export function eventsList(events) {
 }
 
 /** The summary stream stores RAW units, like every other trail. Convert here. */
-export function actionLog(summaries, money_ = DEFAULT_MONEY) {
+export function actionLog(summaries, money_ = DEFAULT_MONEY, { limit = 5, id = 'running-action-more' } = {}) {
   if (!summaries?.length) return html`<p class="dim">no running action recorded yet</p>`;
-  return html`<ul class="list">${summaries.map((s) => html`
+  return recentList(summaries, { limit, id, render: (s) => html`
     <li>
       <div>${utcHm(s.from)}-${utcHm(s.to)}
         <b>${int(s.count)}</b> bets,
@@ -121,7 +134,7 @@ export function actionLog(summaries, money_ = DEFAULT_MONEY) {
         ${int(s.activeGames)} games active</div>
       <div class="dim">top mover ${s.topMover || DASH} ${usd(toUsd(s.topMoverTurnover, money_))}
         - ${int(s.alerts ?? 0)} findings (${int(s.crits ?? 0)} crit, ${int(s.warns ?? 0)} warn)</div>
-    </li>`)}</ul>`;
+    </li>` });
 }
 
 /**
@@ -133,16 +146,34 @@ export function spanPicker(path, span, keys = Object.keys(SPANS)) {
     html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}"${key === span ? raw(' aria-current="true"') : null}>${SPANS[key].label}</a>`)}</span>`;
 }
 
+const NOTHING_MEASURED = 'Nothing measured in this period yet.';
+
 /** A chart's headline, or a plain statement that nothing was measured. */
 export function conclusion(headline) {
-  return html`<p class="conclusion">${headline ?? 'Nothing measured in this period yet.'}</p>`;
+  return html`<p class="conclusion">${headline ?? NOTHING_MEASURED}</p>`;
 }
 
-/** One chart panel: title, the conclusion it supports, the chart, an optional footnote. */
 /** A stable, readable anchor for a panel title: "Luck or fault?" -> "p-luck-or-fault". */
 export const panelId = (title) => `p-${String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
-export function chartPanel(title, headline, chart, note = null) {
-  return html`<section class="panel chart-panel" id="${panelId(title)}"><div class="section-heading"><div><h2>${title}</h2>
-      ${conclusion(headline)}</div></div>${chart}${note ? html`<div class="chart-foot"><span>${note}</span></div>` : null}</section>`;
+/**
+ * One chart panel: title, the conclusion it supports, the chart, an optional
+ * footnote.
+ *
+ * `collapsed` folds the chart and footnote away behind the heading, shut
+ * until the reader opens it; the title and its conclusion stay in view. The
+ * fold carries an id so app.js keeps it open through a live refresh. A
+ * summary may hold only phrasing and heading content, so the folded heading
+ * is an h2 and a span, not the div the open form uses. For static content
+ * only: a chart drawn client-side inside a shut fold would be sized at zero.
+ */
+export function chartPanel(title, headline, chart, note = null, { collapsed = false } = {}) {
+  const id = panelId(title);
+  const foot = note ? html`<div class="chart-foot"><span>${note}</span></div>` : null;
+  if (!collapsed) {
+    return html`<section class="panel chart-panel" id="${id}"><div class="section-heading"><div><h2>${title}</h2>
+      ${conclusion(headline)}</div></div>${chart}${foot}</section>`;
+  }
+  return html`<section class="panel chart-panel" id="${id}"><details class="fold" id="${id}-fold"><summary><h2>${title}</h2><span class="conclusion">${headline ?? NOTHING_MEASURED}</span><span class="fold-arrow" aria-hidden="true"></span></summary>
+      <div class="fold-body">${chart}${foot}</div></details></section>`;
 }

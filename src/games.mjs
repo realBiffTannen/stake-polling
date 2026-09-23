@@ -62,9 +62,9 @@ export function mergeSlugs(...lists) {
  * may show.
  *
  * An explicit allow-list, because this crosses into the browser: the upstream
- * entry also carries image URLs, ratings and monthly figures, and none of
- * them are anybody's to render from here. `published` stays null when the
- * catalogue does not say - absent is not the same claim as `false`.
+ * entry also carries image URLs and monthly figures that nothing here
+ * renders. `published` stays null when the catalogue does not say - absent is
+ * not the same claim as `false` - and so does `rating` (see starRating).
  */
 export function titlesOf(catalogue) {
   return listOf(catalogue).filter((g) => idOf(g)).map((g) => ({
@@ -73,5 +73,30 @@ export function titlesOf(catalogue) {
     isLive: g.isLive === true,
     published: typeof g.published === 'boolean' ? g.published : null,
     approval: g.approval?.column ?? null,
+    rating: ratingOf(g.rating),
   }));
+}
+
+/** A finite number, or null. Never a coerced zero: `Number(null)` is 0. */
+function ratingOf(value) {
+  if (typeof value !== 'number' && !(typeof value === 'string' && value.trim() !== '')) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** The studio dashboard rates a game out of three stars. */
+export const MAX_STARS = 3;
+
+/**
+ * The catalogue's `rating` as the studio dashboard draws it: stars out of
+ * three, `Math.round(rating / 30)` - the rule in studio.engine.io's own games
+ * list, where 60 is two stars and 90 three - clamped so a negative or an
+ * oversized value cannot ask for a star count that does not exist. Null when
+ * there is no rating: the dashboard says "Unrated", and an unrated title has
+ * not earned zero stars.
+ */
+export function starRating(rating) {
+  const n = ratingOf(rating);
+  if (n === null) return null;
+  return Math.min(MAX_STARS, Math.max(0, Math.round(n / 30)));
 }

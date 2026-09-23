@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Games table on the Overview:** every title in the catalogue, live or not, with the star rating the Engine studio shows for it (out of three; the catalogue's `rating` over 30, rounded, as the studio's own games list draws it, or *Unrated*), whether it is live, its approval stage, a link to its game page and a link to its page on the Engine studio. The money table is now titled *Live games this month*.
+
+### Changed
+- **Analysis:** *Unusual days* and *The tape* start folded; the heading and its conclusion stay in view and an arrow opens the list. An opened fold stays open through the live refresh.
+- **Live operations:** *running action* and *findings* show the five newest entries, with the rest behind *Show N more*.
+
 ## 1.0.2 - 2026-09-23
 
 ### Added
