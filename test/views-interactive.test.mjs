@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderAnalysis } from '../src/web/views/analysis.mjs';
 import { renderTrends } from '../src/web/views/trends.mjs';
+import { renderOverview } from '../src/web/views/overview.mjs';
 import { GAME_COLOURS } from '../src/web/charts/donut.mjs';
+import { ACCENTS } from '../src/web/charts/interactive.mjs';
 
 const money = { unitsPerDollar: 1_000_000, profitShare: 0.1, expectedShare: 0.075 };
 const usd = (dollars) => dollars * 1_000_000;
@@ -72,4 +74,28 @@ test('trends with no trail and no sync show empty states and no NaN', () => {
   assert.doesNotMatch(out, /data-ichart=/);
   assert.equal((out.match(/class="empty-state ichart-empty"/g) ?? []).length, 2);
   assert.doesNotMatch(out, /NaN|undefined/);
+});
+
+test('the live page mounts two strips, players online and bets, each labelled per poll', () => {
+  const onlineTrail = [], gameTrails = { berry: [] };
+  for (let t = now - 4 * H - M, i = 0; t <= now; t += SLOT, i++) {
+    onlineTrail.push({ ts: t, fields: { onlinePlayers: 9 } });
+    gameTrails.berry.push({ ts: t, fields: { count: 500 + i * 3 } });
+  }
+  const out = String(renderOverview({ ...baseState, onlineTrail, gameTrails, rows: [] }, { panes: false }));
+  assert.match(out, /<h2>Live stream<\/h2>\s*<p class="conclusion">Last 3h, per poll: 9 players online at 12:00Z/);
+  const online = chartJson(out, 'live-online'), bets = chartJson(out, 'live-bets');
+  assert.equal(online.windowMs, 3 * H);
+  assert.equal(online.slotMs, SLOT);
+  assert.equal(online.colour, ACCENTS.online);
+  assert.ok(bets.points.length > 60 && bets.points.every(([, v]) => v === 3));
+  assert.equal((out.match(/<em>per poll<\/em>/g) ?? []).length, 2);
+  assert.match(out, /One point per poll, every 2\.5 minutes, over the last 3 hours\./);
+});
+
+test('a live page before any poll shows the strips\' empty states and a dash, never a zero', () => {
+  const out = String(renderOverview({ ...baseState, onlineTrail: [], gameTrails: {}, rows: [] }, { panes: false }));
+  assert.doesNotMatch(out, /data-ichart=/);
+  assert.equal((out.match(/<span>Players online<em>per poll<\/em><\/span><b>-<\/b>/g) ?? []).length, 1);
+  assert.match(out, /Live stream<\/h2>\s*<p class="conclusion">Nothing measured in this period yet\./);
 });
