@@ -91,15 +91,18 @@ function rangePicker(href, current) {
 }
 
 /** Players online per poll slot; ranges past a day fold to 15-minute peaks. */
-function onlinePanel({ title, samples, now, range, href }) {
+/** The poll interval in minutes, as configured; 2.5 when the state does not say. */
+const pollOf = (state) => (Number(state?.pollMinutes) > 0 ? Number(state.pollMinutes) : 2.5);
+
+function onlinePanel({ title, samples, now, range, href, poll = 2.5 }) {
   const hours = ONLINE_RANGES[range];
-  let points = onlineSlots(samples ?? [], { now, hours });
+  let points = onlineSlots(samples ?? [], { now, hours, slotMs: poll * 60_000 });
   if (hours > 24) points = thinMax(points, 15 * 60_000);
   return html`<section class="panel chart-panel"><div class="section-heading"><div><h2>${title}</h2>
       <p class="conclusion">${onlineHeadline(points, { now }) ?? 'Nothing measured in this range yet.'}</p></div>
       ${rangePicker(href, range)}</div>
     ${timeLine({ points, title: 'players online', format: (v) => int(v) })}
-    <div class="chart-foot"><span>${hours > 24 ? 'Each point is the peak of 15 minutes of 2.5-minute polls.' : 'One point per 2.5-minute poll. A missed poll breaks the line.'}</span><span>Hover for the reading</span></div></section>`;
+    <div class="chart-foot"><span>${hours > 24 ? `Each point is the peak of 15 minutes of ${poll}-minute polls.` : `One point per ${poll}-minute poll. A missed poll breaks the line.`}</span><span>Hover for the reading</span></div></section>`;
 }
 
 /** The last 30 UTC days from the daily-insights snapshot, for the studio or one game. */
@@ -186,7 +189,7 @@ export function studioTrendPanels({ state, online = null, turnover = null }) {
   const byGame = turnoverByGame(state.dailySnapshot ?? {}, { from: model.from, to: model.to, money: state.money, focus: turnover });
   const allModes = Object.values(state.modeRows ?? {}).flat();
   return html`
-  ${onlinePanel({ title: 'Players online, every 2.5 minutes', samples: state.history?.online, now, range, href: (key) => trendsHref({ online: key, turnover: byGame.focus }) })}
+  ${onlinePanel({ title: `Players online, every ${pollOf(state)} minutes`, poll: pollOf(state), samples: state.history?.online, now, range, href: (key) => trendsHref({ online: key, turnover: byGame.focus }) })}
   ${dailyPanels(model, { modeRows: allModes, scope: 'all games' })}
   ${dailyZoomPanel(model)}
   ${turnoverPanel(byGame, { online: online === range ? range : null })}
@@ -201,7 +204,7 @@ export function gameTrendPanels({ slug, name, state, modeRows = [], span = 'mont
   const base = `/game/${encodeURIComponent(slug)}`;
   const href = (key) => `${base}?${new URLSearchParams({ span, online: key })}`;
   return html`
-  ${onlinePanel({ title: `Players online in ${name}, every 2.5 minutes`, samples: state.history?.game, now, range, href })}
+  ${onlinePanel({ title: `Players online in ${name}, every ${pollOf(state)} minutes`, poll: pollOf(state), samples: state.history?.game, now, range, href })}
   ${dailyPanels(thirtyDays(state, slug), { modeRows, scope: name })}
   ${hourPanel(state.history?.game, now)}`;
 }

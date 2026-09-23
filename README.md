@@ -210,9 +210,10 @@ running elsewhere, this one follows it rather than starting a second: the
 existing poller keeps its lock and is never signalled.
 
 The dashboard binds every interface, so other machines on the network can
-open the printed URL. **It is unauthenticated** - anyone who can reach the
-port can read turnover, profit, player counts, per-mode math and the game
-catalogue, including unreleased titles. To keep it on this machine only:
+open the printed URL. **It is open until you turn sign-in on** (Settings >
+Security; see *Signing in*) - until then anyone who can reach the port can
+read turnover, profit, player counts, per-mode math and the game catalogue,
+including unreleased titles. To keep it on this machine only:
 
     npm start -- --host 127.0.0.1
 
@@ -313,7 +314,7 @@ DevTools → Application → Cookies → `sid`, and either paste it at the promp
 write it to `.sid`.
 
 **When it expires mid-run,** the poller pauses rather than writing fiction into
-the trail. It then tries to recover on its own, once a minute:
+the trail. It then tries to recover on its own, once every poll:
 
 - if `.sid` has changed, it validates the new value and resumes;
 - otherwise it re-reads the Chrome cookie store, at most once every ten minutes.
@@ -334,12 +335,15 @@ error message.** Only `sha256(sid)[0:8]` is recorded, which is enough to tell
 
 ## What is polled
 
+Each endpoint's interval is `intervals` in `config.json`, in minutes, rounded
+to whole polls - so at the shipped 2.5-minute poll, "1 min" means every poll.
+
 | Endpoint | Every | What it gives |
 |---|---|---|
-| `/teams/{team}/stats` | 5 min | the roster — an **array** of `{ name, slug, stats: { count, turnover, profit, expectedProfit, unique } }` |
-| `/teams/{team}/games` | 5 min | the whole catalogue (every title, not just the roster's live ones), with `onlinePlayers` and `stats.month` / `stats.day` **per game** |
-| `/teams/{team}/games/{slug}/stats` | 5 min | per-mode breakdown under `stats` — BASE, BONUS_BOOST, FREE_SPINS and so on, with cost, rtp, effectiveRtp |
-| `/teams/{team}/balance` | 5 min | `{ position, expectedProfit, carry }` — the balance is **not** in the roster response |
+| `/teams/{team}/stats` | every poll | the roster — an **array** of `{ name, slug, stats: { count, turnover, profit, expectedProfit, unique } }` |
+| `/teams/{team}/games` | every poll | the whole catalogue (every title, not just the roster's live ones), with `onlinePlayers` and `stats.month` / `stats.day` **per game** |
+| `/teams/{team}/games/{slug}/stats` | every poll | per-mode breakdown under `stats` — BASE, BONUS_BOOST, FREE_SPINS and so on, with cost, rtp, effectiveRtp |
+| `/teams/{team}/balance` | every poll | `{ position, expectedProfit, carry }` — the balance is **not** in the roster response |
 | `/teams/{team}/graph` | 15 min | `{ profit: [], turnover: [], count: [] }` — parallel arrays, one entry per day |
 | `/teams/{team}/stats?start=&end=` | 60 min | the same roster over the lifetime window (from `lifetimeStart`) |
 
@@ -437,7 +441,7 @@ Namespace `stake:<team>:`.
 | `balance:latest` | string | `{ position, expectedProfit, carry }` |
 | `alerts` | stream | every raised anomaly |
 | `meta` | hash | `last_ok`, `auth_state`, `consecutive_failures`, `sid_fingerprint`, … |
-| `lock:poller` | string | single-instance lock, `SET NX EX 90` |
+| `lock:poller` | string | single-instance lock, `SET NX EX` three polls (at least 90 s; 450 s at the shipped 2.5-minute poll) |
 | `lock:archive` | string | held by the archiver for the length of one run, so two archivers never upload the same day |
 | `archive:status` | string | the archiver's last run: when, where to, which days were stored or failed and why |
 | `auth` | string | sign-in credentials: the username and a salted scrypt hash, never the password - absent while sign-in is off |
@@ -450,7 +454,8 @@ repaints immediately instead of waiting for its next heartbeat.
 
 Every snapshot carries its own fetch timestamp, so a failed endpoint leaves the
 previous value in place and you can still tell how old it is. Trails are capped
-at 8640 entries — 30 days at one sample every five minutes.
+at `retention.trailDays` (30) days of polls - 17,280 entries at the shipped
+2.5-minute poll.
 
 Values from the API are month-to-date **cumulative** totals. They are stored as
 reported; the rate is derived when it is needed.
@@ -706,9 +711,8 @@ npm start -- --no-archive              # run without the archiver
 After that, `npm start` (or the service) archives every night on its own; the
 Archive page's *Last run* shows each run and any failure.
 
-A note on the links: the dashboard is unauthenticated (see *Running
-everything*), so anyone who can open the Archive page can use its presigned
-links while they last. Keep `S3_PRESIGN_SECONDS` short, or bind the dashboard to
+A note on the links: until sign-in is on (see *Signing in*), anyone who can
+open the Archive page can use its presigned links while they last. Keep `S3_PRESIGN_SECONDS` short, or bind the dashboard to
 `127.0.0.1`, if that matters on your network.
 
 ## The accounting day
@@ -727,8 +731,9 @@ claim a measured quiet period rather than an absence of measurement.
 ### Every day, not just this one
 
 `d` (or `--view daily` from a pipe) lists profit **per accounting day**, one
-row per 12:00Z-to-12:00Z day, newest first, with the whole roster beside each
-game:
+row per accounting day, newest first, with the whole roster beside each game.
+This example was taken with `dayBoundaryUtcHour` at 12, so its days run
+12:00Z to 12:00Z; at the shipped 0 they are calendar days:
 
 ```
 daily profit   12:00Z -> 12:00Z, newest first
@@ -784,7 +789,7 @@ already written down rather than reconstructed from the trail.
 ## Anomalies
 
 Detection runs on per-tick deltas, against a rolling **median and MAD**
-baseline of the last 36 samples (three hours at a five-minute poll). Median rather than mean because a 40x spike drags a mean and
+baseline of the last 36 samples (90 minutes at the shipped 2.5-minute poll). Median rather than mean because a 40x spike drags a mean and
 inflates a standard deviation — the spike would end up hiding inside the
 baseline it is measured against.
 
@@ -794,7 +799,7 @@ baseline it is measured against.
 | `share_shift` | a game's share of roster turnover moves ≥ 15 points from its baseline share — "traffic is concentrating on this game" |
 | `flat_line` | a previously busy game reports zero turnover for 15 consecutive minutes — usually an outage |
 | `auth` | the sid was rejected |
-| `poll_failure` | no endpoint answered for three consecutive minutes |
+| `poll_failure` | no endpoint answered for three consecutive polls |
 | `new_game` | a slug appeared that this poller had never seen — raised outside the detector, so it does not wait out the 12-sample warm-up |
 
 The absolute floors are written in **dollars per minute**
@@ -834,7 +839,7 @@ All thresholds live in `config.json` under `detect`.
 | `g` | cycle the drill-down through the roster, without descending |
 | `h` | cycle the bucket size: five minutes, then the hour, then off |
 | `c` | compare one bet mode across every game in the roster |
-| `d` | daily profit: one row per 12:00Z-to-12:00Z accounting day |
+| `d` | daily profit: one row per accounting day (it rolls at `dayBoundaryUtcHour`, 00:00Z shipped) |
 | `[` / `]` | step which bet mode the compare screen is showing |
 | `s` | cycle sort: turnover, turnover/min, profit, spins, name — roster, the per-mode table on a game's tabs, and the compare screen |
 | `a` | toggle the alerts / events / running-action panes |
@@ -904,7 +909,7 @@ runs it, stepping with `[`/`]`.
 |---|---|---|
 | `1` HEALTH | MODE, COST, AVGBET, SPINS, TURNOVER, PROFIT, RTP, EFF, NORM, EDGE_API, vs EXP | the latest snapshot only |
 | `2` LIVE | MODE, SPINS/rate, TURN/rate, PROFIT/rate, SHARE, a 12-tick sparkline | per-poll deltas from the per-mode trail |
-| `3` TODAY | MODE, SPINS, TURNOVER, PROFIT, SHARE | totals since the 12:00Z accounting boundary |
+| `3` TODAY | MODE, SPINS, TURNOVER, PROFIT, SHARE | totals since the accounting-day boundary (`dayBoundaryUtcHour`, 00:00Z shipped) |
 | `4` BUCKETS | the same profit-by-bucket table as **Profit by hour**, below, scoped to this game | the trail, at whatever size `h` last picked (5m by default) |
 
 A narrow terminal drops columns by priority rather than truncating the table —
@@ -1007,21 +1012,25 @@ the full shape):
 }
 ```
 
-Each field the dashboard actually reads has exactly one consumer, all in
-`src/tui/math.mjs`:
+The checks live in `src/math/checks.mjs`; the Game math page, the game pages
+and the terminal dashboard read the fields below.
 
-| Field | Consumer |
+| Field | What reads it |
 |---|---|
-| `edge` | compared against the deployed `1 - rtp` to raise `model_drift`, and against the convergence band to decide `readable` vs `noise` |
-| `maxWin` | the outer bound of `impossible_margin` — a margin outside `[-maxWin, 100%]` is a plumbing bug, not variance |
-| `costLadder` | the ladder shown on the bet-mode focus card, with the current mode's own rung picked out |
+| `version` | shown on the Game math page and the game page |
+| `edge` | compared against the deployed `1 - rtp` to raise `model_drift`, and against the convergence band to decide `readable` vs `noise`; also the fallback captured RTP for a mode without its own `rtp` |
+| `maxWin` | the outer bound of `impossible_margin` - a margin outside `[-maxWin, 100%]` is a plumbing bug, not variance |
+| `costLadder` | the ladder on the game page and the bet-mode focus card, with the current mode's own rung picked out |
+| `baseVolatility`, `volatilityClass`, `starLevel`, `compliance.*` | the Game math table, the game page's verdicts and the Trends page |
+| `modes.<NAME>.cost`, `modes.<NAME>.rtp` | the **drift** check: a deployed mode whose cost or RTP differs from the captured one - or a deployed mode missing from math.json - is listed in the Game math page's "Deployed math differs" warning |
 | `modes.<NAME>.sigma` | the `σ/√N` convergence band |
-| `modes.<NAME>.zeroRate` / `worstLossStreak` | the `expected_quiet` finding — a zero-profit mode going quiet for fewer spins than its captured worst losing streak is its design, not an outage |
+| `modes.<NAME>.zeroRate` / `worstLossStreak` | the `expected_quiet` finding - a zero-profit mode going quiet for fewer spins than its captured worst losing streak is its design, not an outage |
+| `modes.<NAME>.hitRate`, `breakEvenRate`, `mean` | the per-mode columns on the Game math and bet-mode pages |
 
-`version` and `tail` are captured and stored, but **nothing in the dashboard
-reads either one yet** — they are recorded against the day something does.
-Per-mode `cost` is likewise stored but unused: the `COST` column always comes
-from the live snapshot, never from the model.
+`tail`, `minWin`, `subBetRate`, `avgSpinsBetweenWin` and `worstZeroStreak`
+are captured and stored, but nothing reads them yet - they are recorded
+against the day something does. The `COST` column always comes from the live
+snapshot, never from the model.
 
 A game or mode with no entry degrades exactly as `metro-night-run` would if
 it were deleted from this file: the sample size still prints, no band is
@@ -1141,7 +1150,8 @@ It opens an independent reader alongside the running poller; no poller restart
 is needed. The web launcher also runs a bounded daily-history sync using the
 existing `.sid` or `STAKE_SID`. On first launch it fetches up to 30 calendar days
 sequentially (about 61 API requests for a full backfill). Completed historical
-reports are cached; today and yesterday refresh every 15 minutes. A separate
+reports are cached; the sync runs every 3 minutes and re-fetches today and
+yesterday each time. A separate
 `lock:daily-insights` prevents duplicate history syncs when several web servers
 run. Existing poller keys and trails are untouched. Reports live in
 `stake:<team>:insights:daily:v1` and follow Redis persistence settings.
@@ -1150,7 +1160,7 @@ Player metrics have precise scopes:
 
 - **Daily players:** the API's distinct players within a game for one **UTC
   calendar date**, midnight to midnight. These API windows use inclusive dates,
-  independently of the terminal dashboard's 12:00Z accounting boundary.
+  independently of the terminal dashboard's accounting-day boundary.
 - **All games:** sums game-level counts. Someone playing two games can appear
   twice; these are not studio-wide deduplicated people.
 - **New to game:** the difference between consecutive end-of-day cumulative
@@ -1172,9 +1182,9 @@ automatically. The HTTP routes never make upstream requests or expose the sid.
 **Every interface (`0.0.0.0`) is the default**, so other machines on the network
 can reach it — see **Running everything** above for what that exposes.
 `STAKE_WEB_PORT`, `STAKE_WEB_HOST`, `--port`, and `--host` override it;
-`STAKE_WEB_SYNC=0` disables the history worker. There is no web authentication;
-pass `--host 127.0.0.1` (or set `STAKE_WEB_HOST=127.0.0.1`) to keep private
-studio data off the network.
+`STAKE_WEB_SYNC=0` disables the history worker. Until sign-in is turned on
+(see *Signing in*) anyone who can reach it can use it; pass `--host 127.0.0.1`
+(or set `STAKE_WEB_HOST=127.0.0.1`) to keep private studio data off the network.
 
 ## The demo site
 
@@ -1231,7 +1241,7 @@ naming where to set it.
 
 - One poller per team per Redis. The lock enforces it; a second copy exits with
   a message rather than corrupting the trail. Ctrl-C releases the lock
-  immediately, so a restart is instant rather than waiting out the 90s TTL.
+  immediately, so a restart is instant rather than waiting out the lock's TTL.
 - The poller makes authenticated outbound requests. Some agent sandboxes
   classify a `sid`-bearing request as data exfiltration and block it — run the
   daemon from a normal shell.

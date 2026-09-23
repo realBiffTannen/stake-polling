@@ -116,7 +116,7 @@ npm start                  # poller + web dashboard + nightly archiver; prints t
 npm run dash               # optional: the terminal dashboard, in a second terminal
 ```
 
-`npm start` prints a URL for this machine and one for each network address.
+`npm start` prints a URL for this machine and one for each network address (with `--host 127.0.0.1`, just the one it is bound to).
 Open one (port 3005 by default). The first poll lands within one interval
 (2.5 minutes). The 30-day charts fill as the daily sync backfills, which is
 about 61 API requests on first launch.

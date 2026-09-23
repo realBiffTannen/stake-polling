@@ -8,7 +8,7 @@
  * polling, and is never signalled or evicted.
  *
  * The dashboard binds every interface by default, so other machines on the
- * network can open it. That is unauthenticated by design decision: anyone who
+ * network can open it. Until sign-in is turned on (Settings > Security) anyone who
  * can reach the port can read turnover, profit, player counts and the game
  * catalogue. `--host 127.0.0.1` keeps it on this machine only.
  */
@@ -38,7 +38,7 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--wait-for-redis') waitForRedisMs = Number(args[++i]);
   else if (args[i] === '--help') {
     console.log('Usage: npm start -- [--port 3005] [--host 0.0.0.0] [--no-poll] [--no-web] [--no-sync] [--no-archive] [--wait-for-redis <ms>]');
-    console.log('The dashboard is unauthenticated. --host 127.0.0.1 keeps it on this machine.');
+    console.log('The dashboard is open to anyone who can reach it until sign-in is turned on (Settings > Security). --host 127.0.0.1 keeps it on this machine.');
     process.exit(0);
   } else { console.error(`Unknown option: ${args[i]}`); process.exit(1); }
 }
@@ -92,8 +92,9 @@ if (archive) start('archiver', '../bin/stake-archive.mjs', [], { essential: fals
 
 if (web) {
   console.log('Dashboard:');
-  for (const url of lanUrls(port, networkInterfaces())) console.log(`  ${url}`);
-  if (host === '0.0.0.0') console.log('  (reachable by anyone on this network - no password. --host 127.0.0.1 to keep it local)');
+  // Every address only when it listens on every interface; otherwise the one it is bound to.
+  for (const url of host === '0.0.0.0' ? lanUrls(port, networkInterfaces()) : [`http://${host}:${port}`]) console.log(`  ${url}`);
+  if (host === '0.0.0.0') console.log('  (reachable by anyone on this network until sign-in is on - Settings > Security. --host 127.0.0.1 keeps it local)');
 }
 
 let stopping = false;

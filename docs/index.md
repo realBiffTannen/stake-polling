@@ -16,7 +16,9 @@ stats and balance.
 [Try the live demo]({{ site.demo_url }}){: .btn .btn-primary .mr-2 }
 [Get started](getting-started.md){: .btn }
 
-![The stake-polling web dashboard](assets/images/dashboard-placeholder.svg)
+![The overview page of the demo dashboard: twenty made-up games this month](screenshots/overview.png)
+
+*From the demo: every game and figure is made up.*
 
 The demo is a static copy of the real dashboard, built from made-up data for
 about twenty fictional games. See [The demo site](demo.md).

@@ -145,7 +145,7 @@ export class Poller {
         value: this.consecutiveTotalFailures,
         baseline: 0,
         z: 0,
-        message: `no endpoint has answered for ${this.consecutiveTotalFailures} consecutive minutes`,
+        message: `no endpoint has answered for ${this.consecutiveTotalFailures} consecutive polls`,
       });
     }
 

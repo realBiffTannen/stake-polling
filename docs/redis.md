@@ -65,12 +65,9 @@ REDIS_URL=rediss://redis.internal:6380/0     # rediss:// for TLS
 `user:password@` inside `REDIS_URL` works too. If `REDIS_USERNAME` or
 `REDIS_PASSWORD` is set, the credentials in the URL are ignored. Every process
 (the poller, both dashboards, the archiver, `enable-persistence`, `npm run
-auth`) connects the same way, and any URL they print has its password masked.
-Credentials are read from the environment and never carried on the config
-object, so they cannot end up in a log along with it.
-
-The one exception is the small `tools/verify-math-slugs.mjs` helper, which
-reads only the URL. See [math.json](configuration/math-json.md#checking-your-slugs).
+auth`, `tools/verify-math-slugs.mjs`) connects the same way, and any URL they
+print has its password masked. Credentials are read from the environment and
+never carried on the config object, so they cannot end up in a log along with it.
 
 An ACL user needs the keys and the [channels](#channels) matching
 `stake:<team>:*`. The commands the project uses are `GET`,

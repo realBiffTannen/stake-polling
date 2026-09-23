@@ -37,7 +37,7 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--no-sync') syncEnabled = false;
   else if (args[i] === '--help') {
     console.log('Usage: npm run web -- [--port 3005] [--host 0.0.0.0] [--no-sync]');
-    console.log('The dashboard is unauthenticated. --host 127.0.0.1 keeps it on this machine.');
+    console.log('The dashboard is open to anyone who can reach it until sign-in is turned on (Settings > Security). --host 127.0.0.1 keeps it on this machine.');
     process.exit(0);
   } else { console.error(`Unknown option: ${args[i]}`); process.exit(1); }
 }
@@ -261,7 +261,7 @@ try {
 }
 warm();
 console.log(`Player insights: http://${host}:${port}`);
-if (host === '0.0.0.0') console.log('  (reachable by anyone on this network - no password. --host 127.0.0.1 to keep it local)');
+if (host === '0.0.0.0') console.log('  (reachable by anyone on this network until sign-in is on - Settings > Security. --host 127.0.0.1 keeps it local)');
 console.log(syncEnabled ? 'Daily history sync enabled; cached history refreshes every 3 minutes.' : 'Daily history sync disabled; displaying cached data.');
 
 const abort = new AbortController();

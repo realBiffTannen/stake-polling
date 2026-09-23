@@ -39,7 +39,7 @@ callouts:
     color: red
 
 # The public demo site. Pages link it as site.demo_url, never hard-coded.
-demo_url: https://DEMO-URL-PLACEHOLDER
+demo_url: http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/
 
 markdown: kramdown
 kramdown:
