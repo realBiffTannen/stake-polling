@@ -583,6 +583,39 @@ npm start -- --no-archive              # run without the archiver
    credentials your own way (SSO, a role), and set `AWS_PROFILE` in `.env`
    instead - the archiver uses the standard AWS SDK credential chain.
 
+   **Without Python - the same setup by hand with the AWS CLI.** The two
+   policies are in `docs/s3/`: `archiver-policy.example.json` (the archiver's
+   IAM permissions) and `bucket-policy.example.json` (TLS only). With admin
+   credentials, replacing `acme-stake-archive` with your bucket name:
+
+   ```bash
+   B=acme-stake-archive REGION=us-east-1 USER=stake-polling-archiver
+   # bucket (outside us-east-1 add: --create-bucket-configuration LocationConstraint=$REGION)
+   aws s3api create-bucket --bucket $B --region $REGION --object-ownership BucketOwnerEnforced
+   aws s3api put-public-access-block --bucket $B --public-access-block-configuration \
+       BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+   aws s3api put-bucket-encryption --bucket $B --server-side-encryption-configuration \
+       '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+   aws s3api put-bucket-versioning --bucket $B --versioning-configuration Status=Enabled
+   sed "s/YOUR-BUCKET/$B/g" docs/s3/bucket-policy.example.json > /tmp/bucket-policy.json
+   aws s3api put-bucket-policy --bucket $B --policy file:///tmp/bucket-policy.json
+   # the archiver's user: upload, read and list under stake-polling/ - nothing else
+   aws iam create-user --user-name $USER
+   sed "s/YOUR-BUCKET/$B/g" docs/s3/archiver-policy.example.json > /tmp/archiver-policy.json
+   aws iam put-user-policy --user-name $USER --policy-name stake-polling-archive \
+       --policy-document file:///tmp/archiver-policy.json
+   aws iam create-access-key --user-name $USER   # put the two values in .env; the secret is shown once
+   ```
+
+   Then in `.env`: `S3_BUCKET`, `S3_PREFIX=stake-polling`, `AWS_REGION`,
+   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. If you change `S3_PREFIX`,
+   change `stake-polling` in the archiver policy to match.
+
+   **Never give the archiver your root or admin keys.** If `aws sts
+   get-caller-identity` answers with an ARN ending in `:root`, you are using
+   the account's root access key: fine for this one-off setup, but AWS's own
+   advice is to delete root access keys once you have an admin IAM user or SSO.
+
 2. **Restart** so the archiver and the dashboard pick up `.env`:
    `npm run service:uninstall && npm run service:install`, or stop and re-run
    `npm start`.

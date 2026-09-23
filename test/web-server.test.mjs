@@ -37,7 +37,9 @@ test('fragment, CSV, health, invalid routes and methods have correct HTTP behavi
   const csv = await fetch(base + '/export.csv?from=2026-09-17&to=2026-09-17&game=berry');
   assert.match(csv.headers.get('content-type'), /text\/csv/);
   assert.match(await csv.text(), /2026-09-17,berry,10,10,0/);
-  assert.equal((await fetch(base + '/healthz')).status, 200);
+  const health = await fetch(base + '/healthz');
+  assert.equal(health.status, 200);
+  assert.match((await health.json()).version, /^\d+\.\d+\.\d+$/);
   assert.equal((await fetch(base + '/nope')).status, 404);
   assert.equal((await fetch(base + '/', { method: 'POST' })).status, 405);
   assert.equal((await (await fetch(base + '/', { method: 'HEAD' })).text()), '');

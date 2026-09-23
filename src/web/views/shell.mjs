@@ -1,8 +1,9 @@
-import { html } from '../html.mjs';
+import { html, raw } from '../html.mjs';
 import { humanAge, DASH } from '../format.mjs';
 import { banner } from './parts.mjs';
 import { fill } from '../fills.mjs';
 import { assetUrl } from '../static.mjs';
+import { VERSION } from '../../version.mjs';
 
 const NAV = [
   { key: 'overview', href: '/', glyph: '▦', label: 'Overview' },
@@ -31,16 +32,16 @@ export function shell({ state, body, active = 'insights', title = 'Player insigh
   return html`<aside class="sidebar">
     <a class="brand" href="/"><img class="cg-logo" src="${assetUrl('/brand/logo.svg')}" alt="Crash Galaxy" width="150" height="32"><small>STUDIO ANALYTICS</small></a>
     <div class="nav-label">WORKSPACE</div>
-    <nav>${NAV.map(n => html`<a class="${n.key === active ? 'active' : ''}" href="${n.href}"><span>${n.glyph}</span> ${n.label}</a>`)}</nav>
+    <nav aria-label="Workspace">${NAV.map(n => html`<a class="${n.key === active ? 'active' : ''}" href="${n.href}"${n.key === active ? raw(' aria-current="page"') : null}><span aria-hidden="true">${n.glyph}</span> ${n.label}</a>`)}</nav>
     <div class="sidebar-foot"><span class="status-dot"></span> Local workspace<small>${state.meta?.team ?? DASH}<br>Months run 1st 00:00Z</small></div>
   </aside>
   <div class="workspace">
     <header class="app-header"><span>Workspace <span class="muted">/</span> <b>${current}</b></span>
-      <div class="status"><span class="status-dot ${state.stale ? 'stale' : ''}"></span>${state.stale ? 'Collector stale' : 'Collector connected'}<span class="muted">${fill('age', polledText(state.ageMs))}</span></div>
+      <div class="status"><span class="status-dot ${state.stale ? 'stale' : 'live'}" aria-hidden="true"></span>${state.stale ? 'Collector stale' : 'Collector connected'}<span class="muted">${fill('age', polledText(state.ageMs))}</span></div>
     </header>
     ${banner(state)}
     <div class="content">${body}</div>
-    <footer>STUDIO ANALYTICS <span>Observed data. Clear definitions.</span></footer>
+    <footer>STUDIO ANALYTICS <span>Observed data. Clear definitions. <b class="version">v${VERSION}</b></span></footer>
   </div>`;
 }
 

@@ -5,7 +5,7 @@
  * from a pane that failed to render, and one of those is a symptom.
  */
 
-import { html } from '../html.mjs';
+import { html, raw } from '../html.mjs';
 import { usd, int, utcHm, money, DASH } from '../format.mjs';
 import { toUsd, toShareUsd, DEFAULT_MONEY } from '../../money.mjs';
 import { SPANS } from '../../insights/span.mjs';
@@ -109,8 +109,8 @@ export function actionLog(summaries, money_ = DEFAULT_MONEY) {
  * live refresh (the refresh re-fetches the same URL, span included).
  */
 export function spanPicker(path, span, keys = Object.keys(SPANS)) {
-  return html`<span class="quick-ranges span-picker">${keys.map((key) =>
-    html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}">${SPANS[key].label}</a>`)}</span>`;
+  return html`<span class="quick-ranges span-picker" role="group" aria-label="Time span">${keys.map((key) =>
+    html`<a href="${path}?span=${key}" class="${key === span ? 'selected' : ''}"${key === span ? raw(' aria-current="true"') : null}>${SPANS[key].label}</a>`)}</span>`;
 }
 
 /** A chart's headline, or a plain statement that nothing was measured. */

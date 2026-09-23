@@ -62,7 +62,8 @@ export function renderArchive({ state, listing }) {
         <td>${f.date}</td><td class="label-cell">${f.fileUrl ? html`<a class="game-link" href="${f.fileUrl}">${f.name}</a><code class="local-path">${f.path}</code>` : f.name}</td><td>${humanBytes(f.bytes) ?? DASH}</td><td>${utcStamp(f.modified)}</td>
         <td>${f.url ? html`<a class="game-link" href="${f.url}" rel="noreferrer" download="${f.name}">Download ↓</a>
           ${s3 ? html`<details class="presigned"><summary>Presigned URL</summary><code>${f.url}</code></details>` : null}` : DASH}</td></tr>`)
-        : html`<tr><td colspan="5" class="empty">No days archived yet.</td></tr>`}</tbody></table></div></section>`;
+        : html`<tr><td colspan="5" class="empty"><div class="empty-state"><b>No days archived yet</b>
+          <span>The archiver stores each finished UTC day at 00:00:00Z. To store the last week now: <code>npm run archive -- --once</code></span></div></td></tr>`}</tbody></table></div></section>`;
 
   return shell({ state, body, active: 'archive', title: 'Archive' });
 }

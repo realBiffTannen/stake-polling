@@ -1,6 +1,6 @@
 {
   "name": "stake-polling",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "Minute-resolution Engine accounting poller into Redis, with a live terminal dashboard and anomaly detection.",

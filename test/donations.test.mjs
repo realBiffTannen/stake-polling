@@ -34,8 +34,8 @@ test('the Donations page lists every address with a copy control', () => {
 
 test('the sidebar links the Donations page from every screen', () => {
   const out = String(shell({ state, body: 'x', active: 'insights', title: 'Player insights' }));
-  assert.match(out, /<a class="" href="\/donate"><span>[^<]+<\/span> Donations<\/a>/);
-  assert.match(String(shell({ state, body: 'x', active: 'donate', title: 'Donations' })), /<a class="active" href="\/donate">/);
+  assert.match(out, /<a class="" href="\/donate"><span[^>]*>[^<]+<\/span> Donations<\/a>/);
+  assert.match(String(shell({ state, body: 'x', active: 'donate', title: 'Donations' })), /<a class="active" href="\/donate" aria-current="page">/);
 });
 
 test('the README opens with the same donation addresses the dashboard shows', () => {

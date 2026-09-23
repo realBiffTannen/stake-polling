@@ -30,8 +30,8 @@ test('every page in the nav is linked from the shell', () => {
 });
 
 test('the overview is the first page in the nav, and player insights no longer sits at the root', () => {
-  const nav = String(shell({ state, body: 'x', active: 'overview', title: 'Overview' })).match(/<nav>([\s\S]*?)<\/nav>/)[1];
-  const links = [...nav.matchAll(/href="([^"]*)"[^>]*>(?:<span>[^<]*<\/span>)?\s*([^<]+)</g)].map(m => [m[1], m[2].trim()]);
+  const nav = String(shell({ state, body: 'x', active: 'overview', title: 'Overview' })).match(/<nav[^>]*>([\s\S]*?)<\/nav>/)[1];
+  const links = [...nav.matchAll(/href="([^"]*)"[^>]*>(?:<span[^>]*>[^<]*<\/span>)?\s*([^<]+)</g)].map(m => [m[1], m[2].trim()]);
   assert.deepEqual(links[0], ['/', 'Overview']);
   assert.deepEqual(links.find(([, label]) => label === 'Player insights'), ['/insights', 'Player insights']);
 });
@@ -59,4 +59,11 @@ test('the document title carries the team, not a studio baked into the code', ()
   assert.match(documentFor({ body: 'x', title: 'Trends', team: 'acme-studios' }), /<title>Trends · acme-studios<\/title>/);
   assert.match(documentFor({ body: 'x', title: 'Trends' }), /<title>Trends · Studio analytics<\/title>/);
   assert.doesNotMatch(documentFor({ body: 'x' }), /crash|galaxy/i);
+});
+
+test('the page in use is announced as current, and the footer names the release', () => {
+  const out = String(shell({ state, body: 'x', active: 'analysis', title: 'Analysis' }));
+  assert.equal((out.match(/aria-current="page"/g) ?? []).length, 1);
+  assert.match(out, /<a class="active" href="\/analysis" aria-current="page">/);
+  assert.match(out, /<b class="version">v\d+\.\d+\.\d+<\/b>/);
 });

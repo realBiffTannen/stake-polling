@@ -28,7 +28,9 @@ const render = (span, over = {}) => String(renderAnalysis({ state: { ...state, .
 
 test('the picker offers this month, today and every rolling window, and marks the one in use', () => {
   const out = render('today');
-  assert.match(out, /href="\/analysis\?span=today" class="selected"/);
+  assert.match(out, /href="\/analysis\?span=today" class="selected" aria-current="true"/);
+  assert.match(out, /class="quick-ranges span-picker" role="group" aria-label="Time span"/);
+  assert.equal((out.match(/aria-current="true"/g) ?? []).length, 1, 'one segment is current');
   const labels = [...out.matchAll(/href="\/analysis\?span=([^"]+)"[^>]*>([^<]+)</g)].map(([, key, label]) => `${key}:${label}`);
   assert.deepEqual(labels, ['month:This month', 'today:Today', '1h:Last 1h', '3h:Last 3h', '6h:Last 6h', '24h:Last 24h', '3d:Last 3 days']);
 });

@@ -24,6 +24,7 @@ import { renderTrends } from './views/trends.mjs';
 import { renderMath } from './views/math.mjs';
 import { renderDonate } from './views/donate.mjs';
 import { renderArchive } from './views/archive.mjs';
+import { VERSION } from '../version.mjs';
 import { gameModel } from '../math/checks.mjs';
 
 const HEADERS = {
@@ -129,7 +130,7 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
     if (url.pathname === '/' && INSIGHTS_PARAMS.some(p => url.searchParams.has(p))) return text(302, '', { location: `/insights?${url.searchParams}` });
     try {
       const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: url.pathname === '/settlement' ? 2 : null, history: historyFor(url), trailHours: trailHoursFor(url) });
-      if (url.pathname === '/healthz') return { status: 200, type: 'application/json', body: JSON.stringify({ ok: true, collectorStale: !!state.stale, dailySyncError: model.snapshot.error ?? null }) };
+      if (url.pathname === '/healthz') return { status: 200, type: 'application/json', body: JSON.stringify({ ok: true, version: VERSION, collectorStale: !!state.stale, dailySyncError: model.snapshot.error ?? null }) };
       if (url.pathname.startsWith('/game/')) {
         let parts;
         try { parts = url.pathname.slice(6).split('/').map(decodeURIComponent); } catch { return text(404, 'Unknown game'); }

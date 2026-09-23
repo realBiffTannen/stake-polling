@@ -137,6 +137,18 @@ def step(message):
 
 def ensure_bucket(s3, bucket, region):
     from botocore.exceptions import ClientError
+    # Asked first, because us-east-1 answers CreateBucket on a bucket this
+    # account already owns with a plain 200 rather than BucketAlreadyOwnedByYou.
+    try:
+        s3.head_bucket(Bucket=bucket)
+        step(f"s3://{bucket} already exists in this account - bringing it into line")
+        return
+    except ClientError as err:
+        code = str(err.response.get("Error", {}).get("Code"))
+        if code == "403":
+            sys.exit(f"error: the name {bucket} is taken by another AWS account. Bucket names are global; pick another.")
+        if code not in ("404", "NoSuchBucket", "NotFound"):
+            raise
     try:
         args = {"Bucket": bucket, "ObjectOwnership": "BucketOwnerEnforced"}
         # us-east-1 is the one region that must NOT be named here.
