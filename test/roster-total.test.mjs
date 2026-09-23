@@ -488,3 +488,17 @@ test('a measured lifetime turnover of zero stays a zero', () => {
   assert.equal(state.lifetime.turnover, 0);
   assert.equal(state.lifetime.games, 1);
 });
+
+test('each row carries the roster\'s revenue rate in basis points, and a roster that reports none reads as unknown, not 0%', () => {
+  const roster = [
+    { name: 'Berry', slug: 'berry', stats: { count: 1, turnover: 1_000_000, profit: 0, expectedProfit: 0, unique: 1, rate: 1000, revenueShare: 0 } },
+    { name: 'Neon City Heist', slug: 'neon-city-heist', stats: { count: 1, turnover: 1_000_000, profit: 0, expectedProfit: 0, unique: 1, rate: 500, revenueShare: 0 } },
+    { name: 'Lunar Blossom', slug: 'lunar-blossom', stats: { count: 1, turnover: 1_000_000, profit: 0, expectedProfit: 0, unique: 1 } },
+  ];
+  const by = Object.fromEntries(stateOf({ roster }).rows.map((r) => [r.name, r]));
+  assert.equal(by.berry.rate, 1000);
+  assert.equal(by['neon-city-heist'].rate, 500);
+  assert.equal(by['lunar-blossom'].rate, null, 'absent is not zero');
+  const pending = stateOf({ roster, catalogue: [...CATALOGUE, { name: 'Hippo Hustle', slug: 'hippo-hustle', isLive: true, published: true, stats: null, onlinePlayers: 0 }] }).rows.find((r) => r.name === 'hippo-hustle');
+  assert.equal(pending?.rate, null, 'a pending row has no rate');
+});

@@ -138,3 +138,21 @@ test('the money table is titled as the live games this month, so the two tables 
 test('a missing catalogue still renders the Games section, empty', () => {
   assert.match(games(render({ titles: undefined })), /No titles in the catalogue/);
 });
+
+test('the Games section names each roster game\'s revenue model from its rate, and a dash for a title with none', () => {
+  const geyser = { slug: 'pixel-geyser', name: 'Pixel Geyser', isLive: true, published: true, approval: 'responded', rating: 60 };
+  const out = games(render({ rows: [{ ...berry, rate: 1000 }, { ...galaxy, rate: 500 }, pending], titles: [...titles, geyser] }));
+  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.match(row('Berry'), /<span class="model">10% revenue share<\/span>/);
+  assert.match(row('Pixel Geyser'), /<span class="model split">5% GGR, split across providers<\/span>/);
+  assert.doesNotMatch(row('Metro Night Run'), /%/, 'not on the roster: no rate to report');
+  assert.match(row('Metro Night Run'), /reports a revenue rate only for a game on the roster/);
+  assert.match(out, /<th>Revenue model<\/th>/);
+});
+
+test('a roster row without a rate shows a dash, never 0%', () => {
+  const out = games(render({ rows: [{ ...berry, rate: null }, { ...galaxy }] }));
+  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.doesNotMatch(row('Berry'), /GGR|revenue share/);
+  assert.match(row('Berry'), /reports a revenue rate only for a game on the roster/);
+});

@@ -48,6 +48,7 @@ by name:
 | Game | Opens its game page |
 | Rating | The star rating the Engine studio shows for the title, out of three (the catalogue's `rating` over 30, rounded, as the studio's own games list draws it), or **Unrated** |
 | Status | **Live**, **Not live** or **Unpublished** |
+| Revenue model | From the rate the roster reports for the game, in basis points: **10% revenue share** (1000) or **5% GGR, split across providers** (500); any other rate is shown as its percentage. A dash for a title not on the roster, which reports no rate |
 | Approval stage | As the catalogue reports it |
 | Engine | Opens the title's page on the Engine studio (`studio.engine.io/teams/<team>/games/<slug>`) in a new tab |
 

@@ -301,6 +301,8 @@ meter.level::-moz-meter-bar{background:var(--mint);border-radius:999px}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;line-height:1.5;border:1px solid var(--stroke-strong);color:var(--dim);white-space:nowrap}
 .pill.live{color:var(--mint);border-color:rgba(134,225,196,.4);background:rgba(134,225,196,.08)}
 .engine-link{color:var(--link);white-space:nowrap}
+.model{white-space:nowrap}
+.model.split{color:var(--violet)}
 .accordion p{padding:0 2px 16px;font-size:12px;line-height:1.8;color:#8fa0b8;max-width:900px}
 .timeline{position:relative;padding-left:22px}
 .timeline::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;border-radius:2px;background:linear-gradient(180deg,rgba(134,225,196,.5),rgba(148,163,184,.12))}
