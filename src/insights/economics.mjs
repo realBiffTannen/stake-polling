@@ -19,7 +19,7 @@
  *     a UTC month boundary.
  */
 
-import { BUY_COST } from './conclusions.mjs';
+import { isFeatureBuy } from './conclusions.mjs';
 import { DEFAULT_MONEY, toUsd, toShareUsd, formatUsd, formatUsdSigned } from '../money.mjs';
 
 const measured = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -28,7 +28,6 @@ const sumOf = (xs) => xs.reduce((a, b) => a + b, 0);
 const pct = (v, dp = 1) => `${(v * 100).toFixed(dp)}%`;
 const pp = (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}pp`;
 const monthOf = (ts) => new Date(Number(ts)).toISOString().slice(0, 7);
-const isBuy = (r) => measured(r.cost) && Number(r.cost) > BUY_COST;
 const played = (rows) => (Array.isArray(rows) ? rows : []).filter((r) => measured(r.turnover) && Number(r.turnover) > 0);
 
 /** Realised and theoretical hold over a set of per-mode rows. */
@@ -118,7 +117,7 @@ export function buyEconomics(modeRows = [], money = DEFAULT_MONEY) {
   if (!list.length) {
     return { rounds: null, buyRounds: null, conversion: null, buyTurnoverShare: null, avgBuyUsd: null, avgBaseBetUsd: null, tiers: [], headline: null };
   }
-  const buys = list.filter(isBuy), base = list.filter((r) => !isBuy(r));
+  const buys = list.filter(isFeatureBuy), base = list.filter((r) => !isFeatureBuy(r));
   const rounds = sumOf(list.map((r) => Number(r.count)));
   const buyRounds = sumOf(buys.map((r) => Number(r.count)));
   const turn = (rows) => sumOf(rows.filter((r) => measured(r.turnover)).map((r) => Number(r.turnover)));

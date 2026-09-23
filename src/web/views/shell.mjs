@@ -100,5 +100,5 @@ export function shell({ state, body, active = 'insights', title = 'Player insigh
 }
 
 export function documentFor({ body, title = 'Studio analytics', team = null }) {
-  return '<!doctype html>' + String(html`<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} · ${team ?? 'Studio analytics'}</title><link rel="icon" href="${assetUrl('/brand/favicon.svg')}" type="image/svg+xml"><link rel="stylesheet" href="${assetUrl('/app.css')}"><script src="${assetUrl('/app.js')}" defer></script></head><body><main>${body}</main><div id="refresh-status" class="refresh-status" role="status" hidden></div></body></html>`);
+  return '<!doctype html>' + String(html`<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} · ${team ?? 'Studio analytics'}</title><link rel="icon" href="${assetUrl('/brand/favicon.svg')}" type="image/svg+xml"><link rel="stylesheet" href="${assetUrl('/app.css')}"><link rel="stylesheet" href="${assetUrl('/charts.css')}"><script src="${assetUrl('/app.js')}" defer></script><script src="${assetUrl('/charts.js')}" defer></script></head><body><main>${body}</main><div id="refresh-status" class="refresh-status" role="status" hidden></div></body></html>`);
 }

@@ -18,7 +18,7 @@ import { int, usd, DASH } from '../format.mjs';
 import { formatUsd, formatUsdSigned } from '../../money.mjs';
 import { chartPanel, conclusion } from './parts.mjs';
 import { buildInsights } from '../../insights/model.mjs';
-import { onlineSlots, thinMax, onlineHeadline, movingAverage, cumulative, weekOnWeek, hourOfDay, turnoverByGame } from '../../insights/series.mjs';
+import { onlineSlots, thinMax, onlineHeadline, movingAverage, cumulative, weekOnWeek, hourOfDay, turnoverByGame, hourByDay, dailyTrend } from '../../insights/series.mjs';
 import { dailyPnl } from '../../insights/conclusions.mjs';
 import { holdTable } from '../../insights/economics.mjs';
 import { lineChart } from '../charts/line.mjs';
@@ -27,6 +27,7 @@ import { stackedBars } from '../charts/bars.mjs';
 import { timeLine } from '../charts/time.mjs';
 import { PAIR_COLOURS } from '../charts/hbars.mjs';
 import { GAME_COLOURS, OTHER_COLOUR } from '../charts/donut.mjs';
+import { interactiveChart, emptyChart, heatmapData, dailyData } from '../charts/interactive.mjs';
 
 /** The players-online ranges, in hours. 24 hours is the default. */
 export const ONLINE_RANGES = { '6h': 6, '24h': 24, '3d': 72, '7d': 168 };
@@ -154,6 +155,25 @@ function hourPanel(trail, now) {
     'Averaged over the last 7 days of the collector\'s trail. When play happens, not how much of it.');
 }
 
+/** Bets in every hour of the last 7 UTC days: the hour-of-day profile, one day at a time. */
+function hourByDayPanel(trail, now) {
+  const grid = hourByDay(trail ?? [], 'count', { now, days: 7, noun: 'bets' });
+  const data = heatmapData(grid, { noun: 'bets' });
+  return chartPanel('Hour by day', grid.headline,
+    data.cells.length ? interactiveChart({ id: 'hour-by-day', kind: 'heatmap', title: 'Bets in each UTC hour of the last 7 days', data })
+      : emptyChart('The collector\'s trail has no bets in the last 7 days yet.'),
+    'Bets per UTC hour from the collector\'s trail. A dashed outline is an hour it missed - empty, not zero; today stops at the hour now.');
+}
+
+/** Daily turnover and studio P/L over the 30 days the daily panels chart, zoomable. */
+function dailyZoomPanel(model) {
+  const trend = dailyTrend(model.daily ?? []);
+  return chartPanel('Turnover and studio P/L, day by day', trend.headline,
+    trend.headline ? interactiveChart({ id: 'daily-zoom', kind: 'daily', title: 'Daily turnover and studio P/L over the last 30 UTC days', data: dailyData(trend) })
+      : emptyChart('The daily sync has not stored any days yet.'),
+    'Drag either end of the slider to zoom into any stretch of the last 30 UTC days. Turnover and P/L each keep their own scale; a day the sync missed is a gap, not a zero.');
+}
+
 /**
  * The studio's trends, for /trends. `online` is the players-online range
  * parameter and `turnover` the game picked in the turnover legend; each
@@ -168,8 +188,10 @@ export function studioTrendPanels({ state, online = null, turnover = null }) {
   return html`
   ${onlinePanel({ title: 'Players online, every 2.5 minutes', samples: state.history?.online, now, range, href: (key) => trendsHref({ online: key, turnover: byGame.focus }) })}
   ${dailyPanels(model, { modeRows: allModes, scope: 'all games' })}
+  ${dailyZoomPanel(model)}
   ${turnoverPanel(byGame, { online: online === range ? range : null })}
-  ${hourPanel(state.history?.team, now)}`;
+  ${hourPanel(state.history?.team, now)}
+  ${hourByDayPanel(state.history?.team, now)}`;
 }
 
 /** One game's trends, for its page. Keeps the page's span in the picker links. */
