@@ -29,7 +29,7 @@ export function renderModePage({ slug, mode, model, state, math, modeRows = [], 
   const band = convergence({ sigma: captured?.sigma, count: row?.count });
 
   if (!row) {
-    return shell({ state, active: 'overview', title: `${name} · ${mode}`,
+    return shell({ state, active: 'overview', title: `${name} · ${mode}`, crumbs: [{ label: name, href: `/game/${encodeURIComponent(slug)}` }, { label: mode }],
       body: html`<div class="page-heading"><div><div class="eyebrow">BET MODE</div><h1>${mode}<span>.</span></h1>
         <p>${name}</p></div></div>
       <div class="notice warning">This mode is not present in the current per-mode response for ${name}. It may have been renamed, removed, or never deployed.</div>` });
@@ -84,5 +84,5 @@ export function renderModePage({ slug, mode, model, state, math, modeRows = [], 
   <section class="panel definitions"><div class="section-heading"><h2>About this page</h2></div>
     <p>The studio API does not report player identity per bet mode - unique, new and returning players exist only per game. No player counts are shown here, and none are estimated from turnover or bet counts. Game-level player figures are on the <a href="/game/${encodeURIComponent(slug)}">game page</a>.</p></section>`;
 
-  return shell({ state, body, active: 'overview', title: `${name} · ${mode}` });
+  return shell({ state, body, active: 'overview', title: `${name} · ${mode}`, crumbs: [{ label: name, href: `/game/${encodeURIComponent(slug)}` }, { label: mode }] });
 }

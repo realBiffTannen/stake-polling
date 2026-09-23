@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.0.2 - 2026-09-23
+
+### Added
+- **Optional sign-in** for the dashboard, off until turned on in Settings:
+  - the password is kept as a salted scrypt hash, and sessions are stored by the hash of their token in HttpOnly SameSite=Strict cookies;
+  - every form carries a CSRF token and is refused from another origin;
+  - sign-in and password checks are rate-limited per address;
+  - changing the password, signing out everywhere or turning sign-in off ends every other session;
+  - `npm run auth -- status|disable` recovers from the machine itself.
+- **Settings page** with Security, System and About tabs: the sign-in switch and forms, Redis memory as a level meter, and showing dismissed warnings again.
+- **Players on Analysis:**
+  - average and peak players online, and players new to the month;
+  - how turnover and bets move with players online (Pearson's r and the turnover per extra player, one point per poll interval);
+  - each game's share of turnover against its share of players.
+
+  All of these relate counts to money; the API never identifies a player.
+- **Interactive charts,** served from the dashboard, not a CDN:
+  - Apache ECharts draws an hour-by-day heatmap and a zoomable daily trend on Trends, and a turnover treemap and turnover-flow Sankey on Analysis;
+  - Smoothie draws live strips of players online and bets per poll on Live operations.
+- **Last 10 min span,** with the picker ordered shortest first.
+- **Daily breakdown as a PDF,** as well as CSV, from a dependency-free PDF writer.
+- **Interface:** a command palette (Cmd/Ctrl+K or /), breadcrumbs, a mobile navigation drawer, a poll progress bar, an "On this page" scrollspy on Analysis, accordions, a timeline tape, an overflow menu, a table filter and modal dialogs.
+- **Demo site:** a static copy of the dashboard running on made-up data for twenty fictional games (`npm run demo:build`, `npm run demo:deploy`), hosted at http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/
+- **Documentation site** on GitHub Pages, plus `SECURITY.md` and `CONTRIBUTING.md`.
+
+### Changed
+- Dismissed warnings are kept on the server for everyone, not in one browser.
+- The archive page drops its redundant "Presigned URL" disclosure. The local archive links each file on disk (`file://`) as well as serving it.
+- `Referrer-Policy` is `same-origin`. Under `no-referrer`, browsers send `Origin: null` on form posts, which the CSRF check refuses.
+- `STAKE_MATH_FILE` names a math.json other than the one at the root.
+
+### Fixed
+- The README screenshots showed a real studio's games and figures; they are replaced by screenshots of the demo.
+- Game, bet-mode and bucket pages name themselves in the breadcrumbs.
+
 ## 1.0.1 - 2026-09-23
 
 ### Dashboard design

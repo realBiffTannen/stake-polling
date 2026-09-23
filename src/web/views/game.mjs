@@ -135,7 +135,7 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
   <div class="notice warning">${name} is not live${title.published === false ? ' and not published' : ''}. The API reports no play data for it${title.approval ? html` - approval stage: <b>${title.approval}</b>` : null}.</div>
   ${modesPanel}
   ${mathCard(math)}`;
-    return shell({ state, body, active: 'overview', title: name });
+    return shell({ state, body, active: 'overview', title: name, crumbs: [{ label: name }] });
   }
 
   const pnl = pnlByMode(rows, state.money);
@@ -265,5 +265,5 @@ export function renderGamePage({ slug, model, state, math, modeRows = [], modeDa
     <p>Players online every poll, the last 30 days of play, and when in the day it happens.</p></div></div>
   ${gameTrendPanels({ slug, name, state, modeRows, span, online })}`;
 
-  return shell({ state, body, active: 'overview', title: name });
+  return shell({ state, body, active: 'overview', title: name, crumbs: [{ label: name }] });
 }

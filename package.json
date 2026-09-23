@@ -1,6 +1,6 @@
 {
   "name": "stake-polling",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "description": "Minute-resolution Engine accounting poller into Redis, with a live terminal dashboard and anomaly detection.",
@@ -30,6 +30,8 @@
     "service:status": "node scripts/service.mjs status",
     "enable-persistence": "node scripts/enable-persistence.mjs",
     "auth": "node scripts/auth.mjs",
+    "demo:build": "node scripts/demo-build.mjs",
+    "demo:deploy": "node scripts/demo-deploy.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

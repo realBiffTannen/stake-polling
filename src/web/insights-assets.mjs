@@ -119,6 +119,8 @@ tbody tr:hover{background:rgba(148,163,184,.06)}
 .banner{display:flex;align-items:center;gap:11px;border-bottom:1px solid transparent}
 .banner::before{content:"!";flex:none;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:800;color:var(--bg)}
 .banner.bad::before{background:#ffa0ad}.banner.warn::before{background:#f3cd8c}
+.demo-banner{padding:10px 38px;background:linear-gradient(90deg,rgba(166,154,255,.18),rgba(134,225,196,.12));border-bottom:1px solid rgba(166,154,255,.3);color:#d9d4ff;font-size:12px}
+.demo-banner a{color:var(--mint);text-decoration:underline}
 .notice[hidden]{display:none}.notice.dismissible{position:relative;padding-right:48px}
 .notice .dismiss{position:absolute;top:7px;right:8px;width:30px;height:30px;display:grid;place-items:center;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.65;font-size:19px;line-height:1;cursor:pointer}
 .notice .dismiss:hover{opacity:1;background:rgba(148,163,184,.14)}
@@ -326,6 +328,16 @@ export const INSIGHTS_JS = `
     }
     setTimeout(() => { button.textContent = 'Copy'; }, 2000);
   });
+  // The demo site (a static copy of the dashboard, html[data-demo]) has no
+  // server to post to: every form says so instead. Capture phase, so it runs
+  // before any other submit handler.
+  document.addEventListener('submit', (event) => {
+    if (!document.documentElement || !document.documentElement.hasAttribute || !document.documentElement.hasAttribute('data-demo')) return;
+    event.preventDefault();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    const note = document.getElementById('refresh-status');
+    if (note) { note.textContent = 'This is a demo with made-up data, so changes and downloads from forms are turned off.'; note.hidden = false; setTimeout(() => { note.hidden = true; }, 4000); }
+  }, true);
   // Dismissing a standing warning posts to /dismiss (views/parts.mjs), where
   // it is kept for everyone. With scripts it happens in place; without, the
   // form posts and the page comes back without the warning.

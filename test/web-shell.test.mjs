@@ -71,3 +71,8 @@ test('the page in use is announced as current, and the footer names the release'
   assert.match(out, /<a class="active" href="\/analysis" aria-current="page">/);
   assert.match(out, /<b class="version">v\d+\.\d+\.\d+<\/b>/);
 });
+
+test('a page below its section says so in the breadcrumbs', () => {
+  const out = String(shell({ state, body: 'x', active: 'overview', title: 'Berry', crumbs: [{ label: 'Berry', href: '/game/berry' }, { label: 'BASE' }] }));
+  assert.match(out, /<ol><li><a href="\/">Workspace<\/a><\/li><li><a href="\/">Overview<\/a><\/li><li><a href="\/game\/berry">Berry<\/a><\/li><li aria-current="page"><b>BASE<\/b><\/li><\/ol>/);
+});

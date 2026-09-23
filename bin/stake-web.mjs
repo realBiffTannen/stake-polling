@@ -25,7 +25,8 @@ const config = loadConfig(), k = keys(config.team);
 // Loaded once at startup, not per request: the model file does not change
 // while the process is running, and re-parsing it on every dashboard read
 // would be pure waste.
-const mathModel = loadMathModel(new URL('../math.json', import.meta.url).pathname);
+// math.json at the root, unless STAKE_MATH_FILE names another (the demo build does).
+const mathModel = loadMathModel(process.env.STAKE_MATH_FILE || new URL('../math.json', import.meta.url).pathname);
 let host = process.env.STAKE_WEB_HOST ?? config.web?.host ?? '0.0.0.0';
 let port = Number(process.env.STAKE_WEB_PORT ?? config.web?.port ?? 3005);
 let syncEnabled = process.env.STAKE_WEB_SYNC !== '0';

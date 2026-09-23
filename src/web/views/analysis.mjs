@@ -36,6 +36,8 @@ import { playersByGame, playerCorrelation, contribution, playersHeadline, correl
 import { scatterChart } from '../charts/scatter.mjs';
 
 const pct1 = (v) => `${Number(v).toFixed(1)}%`;
+/** 2 -> "2nd", 11 -> "11th", 23 -> "23rd". */
+export const ordinal = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 const marginPct = (v) => `${(Number(v) * 100).toFixed(1)}%`;
 const hh = (ts) => new Date(ts).toISOString().slice(11, 13);
 
@@ -196,7 +198,7 @@ export function renderAnalysis({ state, model, span = 'month' }) {
 
   ${panel('Players and turnover', correlationHeadline(playerLinks, { intervalWords: perPoll }),
     playerLinks.points.length ? scatterChart({ points: scatterPoints, xLabel: 'Players online', yLabel: `Turnover ${perPoll} ($)`, fit: true, title: 'Players online against turnover, one dot per poll interval' }) : null,
-    `One dot per poll interval${step > 1 ? ` (every ${step}th of ${int(playerLinks.points.length)} drawn; r uses them all)` : ''}. The API never identifies a player, so this relates how many were on to what was staked - it does not follow any one player, and a link is not a cause.`)}
+    `One dot per poll interval${step > 1 ? ` (every ${ordinal(step)} of ${int(playerLinks.points.length)} drawn; r uses them all)` : ''}. The API never identifies a player, so this relates how many were on to what was staked - it does not follow any one player, and a link is not a cause.`)}
 
   ${panel('Player contribution by game', contributionHeadline(contrib), contrib.length ? h`<div class="scroll"><table><thead><tr><th>Game</th><th>Avg online</th><th>Peak</th><th>New this month</th><th>Share of players</th><th>Share of turnover</th><th>Share of bets</th><th>Contribution</th></tr></thead>
       <tbody>${contrib.map((r) => h`<tr><td class="label-cell"><a class="game-link" href="/game/${encodeURIComponent(r.slug)}">${r.label}</a></td>

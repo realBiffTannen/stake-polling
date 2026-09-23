@@ -20,10 +20,12 @@ per-mode stats and balance.
 >
 > Thank you.
 
-<img width="1511" height="833" alt="Screenshot 2026-09-22 at 5 38 55 PM" src="https://github.com/user-attachments/assets/460ad7d7-2c8c-4d3b-887b-079c64d1fc41" />
-<img width="1512" height="711" alt="Screenshot 2026-09-22 at 5 39 06 PM" src="https://github.com/user-attachments/assets/449136b2-1867-4f3a-9520-6174c1a9344b" />
-<img width="1499" height="652" alt="Screenshot 2026-09-22 at 5 39 51 PM" src="https://github.com/user-attachments/assets/a73d1a1a-2782-4e58-9f07-726d8128e769" />
-<img width="1482" height="620" alt="Screenshot 2026-09-22 at 5 40 01 PM" src="https://github.com/user-attachments/assets/cf9c0dc0-17c4-4613-91f5-8b6a2f09a771" />
+**[Try the live demo](http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/)** - a click-through copy of the dashboard, running on made-up data for twenty fictional games (see [The demo site](#the-demo-site)). **[Read the documentation](https://realbifftannen.github.io/stake-polling/)** for setup and every feature.
+
+<a href="docs/screenshots/overview.png"><img src="docs/screenshots/overview.png" width="49%" alt="Overview: every game this month, one line each"></a> <a href="docs/screenshots/analysis.png"><img src="docs/screenshots/analysis.png" width="49%" alt="Analysis: donuts, P/L by game and the span picker"></a>
+<a href="docs/screenshots/players.png"><img src="docs/screenshots/players.png" width="49%" alt="Players online against turnover, one dot per poll"></a> <a href="docs/screenshots/trends.png"><img src="docs/screenshots/trends.png" width="49%" alt="Trends: players online every poll"></a>
+
+*Screenshots are from the demo: every game and figure in them is made up.*
 
 Four processes, joined only by Redis:
 
@@ -438,6 +440,10 @@ Namespace `stake:<team>:`.
 | `lock:poller` | string | single-instance lock, `SET NX EX 90` |
 | `lock:archive` | string | held by the archiver for the length of one run, so two archivers never upload the same day |
 | `archive:status` | string | the archiver's last run: when, where to, which days were stored or failed and why |
+| `auth` | string | sign-in credentials: the username and a salted scrypt hash, never the password - absent while sign-in is off |
+| `auth:epoch` | string | a counter that versions the credentials; moving it ends every session |
+| `session:{sha256}` | string | one per signed-in browser, named by its token's hash, with an expiry |
+| `dismissed` | set | standing warnings dismissed for everyone |
 
 Channels `tick` and `alerts:ch` are published after each tick so the dashboard
 repaints immediately instead of waiting for its next heartbeat.
@@ -1170,6 +1176,31 @@ can reach it — see **Running everything** above for what that exposes.
 pass `--host 127.0.0.1` (or set `STAKE_WEB_HOST=127.0.0.1`) to keep private
 studio data off the network.
 
+## The demo site
+
+**[http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/](http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/)** is the real dashboard, frozen into static pages and fed made-up data. Click anything:
+- the span pickers and the Cmd/Ctrl+K palette;
+- every game page, with its bet modes and captured math;
+- the charts, the settings, and the CSV and PDF exports.
+
+Nothing on it is real, and nothing on it comes from a studio.
+
+How it is made (`npm run demo:build`, then `npm run demo:deploy`):
+
+1. **A made-up studio.** `src/demo/model.mjs` generates twenty fictional games, from Berry Bonanza to Frost Fortune. Each one has:
+   - month-to-date turnover between $500,000 and $2,500,000;
+   - two to five bet modes: base play, sometimes an ante, and feature buys from 40x to 400x;
+   - a daily cycle of players and busier weekends;
+   - feature buys and big wins that pay out lumpily, around an RTP of 94.5-96.75%.
+
+   It is generated from a fixed seed, so the same build moment gives the same demo. The Engine API's five endpoints are answered from this model in the real response shapes.
+2. **The real collector.** The production poller polls that fake API through three simulated days, one 2.5-minute tick at a time, into a Redis namespace of its own (`stake:demo-studio:*`). So the trail, the per-mode fields, the running log and the anomaly alerts are written by exactly the code a real install runs. The daily history, the rollups, a nightly archive file and a captured math model (`src/demo/math.mjs`) are made the same way. One game's math is left stale and one is left uncaptured on purpose, so the Game math warnings show.
+3. **Frozen into pages.** The real web server serves that namespace. Every page, picker setting, game page and export is crawled and saved as static files (`src/demo/site.mjs`). S3's website endpoint ignores query strings, so `/analysis?span=24h` is saved as `/analysis/q/span-24h/` and every link is rewritten to match. The demo namespace is then deleted from Redis.
+4. **Read-only.** Each page carries a banner saying it is a demo. Forms (sign-in, settings, dismissing a warning) show a note instead of posting, and the live refresh is off, because there is no server behind a static page.
+5. **Hosted on S3.** `npm run demo:deploy -- --bucket <name> --create` makes an S3 static-website bucket, public for reading only. It uploads the site gzipped and removes anything an earlier build left behind. Use a bucket that holds nothing but the demo: never the archive bucket, which must stay private.
+
+Built in the first four days of a month, the demo is dated to the last day of the month before, so its month-to-date figures are a full month's worth. The build needs a local Redis. It writes only its own namespace (`DEMO_REDIS_URL`, default database 3) and deletes it afterwards.
+
 ## Configuration
 
 Four layers, later ones winning:
@@ -1191,7 +1222,7 @@ Four layers, later ones winning:
    `STAKE_WAIT_FOR_REDIS_MS`; Redis: `REDIS_USERNAME`, `REDIS_PASSWORD`,
    `REDIS_DB_SIZE`; the archive: `S3_BUCKET`, `S3_PREFIX`, `S3_PRESIGN_SECONDS`,
    `STAKE_ARCHIVE_DIR`, and the AWS SDK's own (`AWS_REGION`, `AWS_PROFILE`,
-   `AWS_ACCESS_KEY_ID`, ...).
+   `AWS_ACCESS_KEY_ID`, ...); `STAKE_MATH_FILE` (a math.json other than the root one); and for the demo build, `DEMO_REDIS_URL`.
 
 Startup refuses a missing team or an invalid `lifetimeStart` with a message
 naming where to set it.
@@ -1210,6 +1241,19 @@ naming where to set it.
   goes blank. A value that is genuinely unknown is omitted rather than written
   as `0`, because a fabricated zero is indistinguishable from a real collapse
   and would fire a `drop` alert.
+
+## Third-party software
+
+Installed from npm, not copied into this repository:
+
+| Package | Licence | Used for |
+|---|---|---|
+| [redis](https://github.com/redis/node-redis) | MIT | the Redis client |
+| [@aws-sdk/client-s3](https://github.com/aws/aws-sdk-js-v3), [@aws-sdk/s3-request-presigner](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 | the S3 archive and the demo deploy; loaded only when `S3_BUCKET` is set |
+| [Apache ECharts](https://echarts.apache.org) (with zrender, BSD-3-Clause) | Apache-2.0 | the heatmap, treemap, Sankey and zoomable trend, served from this dashboard, not a CDN |
+| [Smoothie Charts](http://smoothiecharts.org) | MIT | the live-stream strips on Live operations |
+
+The PDF writer, the QR encoder and every other chart are written here, with no dependency.
 
 ## License
 
