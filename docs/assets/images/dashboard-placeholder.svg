@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-label="Screenshot placeholder: the stake-polling web dashboard">
+  <rect width="1200" height="640" rx="18" fill="#101722"/>
+  <rect x="0" y="0" width="230" height="640" rx="18" fill="#141d2b"/>
+  <rect x="230" y="0" width="12" height="640" fill="#141d2b"/>
+  <g fill="#23324a">
+    <rect x="28" y="36" width="150" height="22" rx="6"/>
+    <rect x="28" y="96" width="170" height="16" rx="5"/>
+    <rect x="28" y="128" width="140" height="16" rx="5"/>
+    <rect x="28" y="160" width="160" height="16" rx="5"/>
+    <rect x="28" y="192" width="120" height="16" rx="5"/>
+    <rect x="28" y="224" width="150" height="16" rx="5"/>
+    <rect x="28" y="256" width="130" height="16" rx="5"/>
+  </g>
+  <rect x="270" y="30" width="900" height="36" rx="10" fill="#172234"/>
+  <g fill="#1b283d">
+    <rect x="270" y="96" width="210" height="96" rx="12"/>
+    <rect x="500" y="96" width="210" height="96" rx="12"/>
+    <rect x="730" y="96" width="210" height="96" rx="12"/>
+    <rect x="960" y="96" width="210" height="96" rx="12"/>
+    <rect x="270" y="214" width="900" height="390" rx="12"/>
+  </g>
+  <text x="720" y="400" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="30" fill="#8fa3bf">Screenshot of the web dashboard goes here</text>
+  <text x="720" y="440" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" fill="#5f7390">Replace docs/assets/images/dashboard-placeholder.svg with a capture of the demo site</text>
+</svg>
