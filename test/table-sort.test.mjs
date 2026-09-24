@@ -74,17 +74,17 @@ function fakePage(tables) {
 }
 
 const HEADS = [['Game', 'text'], ['Bets', 'number'], ['Engine']];
-const rows = () => [[['Candy'], ['123,171', 123171], ['↗']], [['Hog Stampede'], ['33,637', 33637], ['↗']], [['Ganja Ranch'], ['44,906', 44906], ['↗']]];
-const withDetails = () => [[['Candy'], ['123,171', 123171], ['↗'], { details: 'candy' }], [['Hog Stampede'], ['33,637', 33637], ['↗'], { details: 'hog' }], [['Ganja Ranch'], ['44,906', 44906], ['↗'], { details: 'ganja' }]];
+const rows = () => [[['Berry'], ['12,345', 12345], ['↗']], [['Pixel Geyser'], ['3,456', 3456], ['↗']], [['Metro Night Run'], ['7,890', 7890], ['↗']]];
+const withDetails = () => [[['Berry'], ['12,345', 12345], ['↗'], { details: 'berry' }], [['Pixel Geyser'], ['3,456', 3456], ['↗'], { details: 'pixel-geyser' }], [['Metro Night Run'], ['7,890', 7890], ['↗'], { details: 'metro-night-run' }]];
 
 test('clicking a numeric heading sorts biggest first, and clicking it again reverses the order', () => {
   const table = makeTable('live-games', HEADS, rows());
   const page = fakePage(() => [table]);
   page.click(table.ths[1]);
-  assert.deepEqual(table.order(), ['Candy', 'Ganja Ranch', 'Hog Stampede']);
+  assert.deepEqual(table.order(), ['Berry', 'Metro Night Run', 'Pixel Geyser']);
   assert.equal(table.ths[1].getAttribute('aria-sort'), 'descending');
   page.click(table.ths[1]);
-  assert.deepEqual(table.order(), ['Hog Stampede', 'Ganja Ranch', 'Candy']);
+  assert.deepEqual(table.order(), ['Pixel Geyser', 'Metro Night Run', 'Berry']);
   assert.equal(table.ths[1].getAttribute('aria-sort'), 'ascending');
 });
 
@@ -93,7 +93,7 @@ test('clicking a text heading sorts A to Z first, and the other headings drop th
   const page = fakePage(() => [table]);
   page.click(table.ths[1]);
   page.click(table.ths[0]);
-  assert.deepEqual(table.order(), ['Candy', 'Ganja Ranch', 'Hog Stampede']);
+  assert.deepEqual(table.order(), ['Berry', 'Metro Night Run', 'Pixel Geyser']);
   assert.equal(table.ths[0].getAttribute('aria-sort'), 'ascending');
   assert.equal(table.ths[1].getAttribute('aria-sort'), 'none');
 });
@@ -111,7 +111,7 @@ test('a heading without a sort kind, and the Total footer, are left alone', () =
   const table = makeTable('live-games', HEADS, rows());
   const page = fakePage(() => [table]);
   page.click(table.ths[2]);
-  assert.deepEqual(table.order(), ['Candy', 'Hog Stampede', 'Ganja Ranch'], 'server order kept');
+  assert.deepEqual(table.order(), ['Berry', 'Pixel Geyser', 'Metro Night Run'], 'server order kept');
   assert.equal(table.ths[2].getAttribute('aria-sort'), null);
 });
 
@@ -122,7 +122,7 @@ test('the chosen sort survives the fragment refresh that replaces the table', ()
   page.click(table.ths[1]);
   table = makeTable('live-games', HEADS, rows());
   page.refreshed();
-  assert.deepEqual(table.order(), ['Hog Stampede', 'Ganja Ranch', 'Candy'], 'the fresh table is put back in the chosen order');
+  assert.deepEqual(table.order(), ['Pixel Geyser', 'Metro Night Run', 'Berry'], 'the fresh table is put back in the chosen order');
   assert.equal(table.ths[1].getAttribute('aria-sort'), 'ascending');
 });
 
@@ -139,29 +139,29 @@ test('sortable headings are reachable from the keyboard and announce that they s
 test('the expand button opens its details row and says so; clicking again closes it', () => {
   const table = makeTable('catalogue', HEADS, withDetails());
   const page = fakePage(() => [table]);
-  page.click(table.button('hog'));
-  assert.equal(table.detailsRow('hog').classList.contains('open'), true);
-  assert.equal(table.button('hog').getAttribute('aria-expanded'), 'true');
-  assert.equal(table.detailsRow('candy').classList.contains('open'), false, 'only the clicked row opens');
-  page.click(table.button('hog'));
-  assert.equal(table.detailsRow('hog').classList.contains('open'), false);
-  assert.equal(table.button('hog').getAttribute('aria-expanded'), 'false');
+  page.click(table.button('pixel-geyser'));
+  assert.equal(table.detailsRow('pixel-geyser').classList.contains('open'), true);
+  assert.equal(table.button('pixel-geyser').getAttribute('aria-expanded'), 'true');
+  assert.equal(table.detailsRow('berry').classList.contains('open'), false, 'only the clicked row opens');
+  page.click(table.button('pixel-geyser'));
+  assert.equal(table.detailsRow('pixel-geyser').classList.contains('open'), false);
+  assert.equal(table.button('pixel-geyser').getAttribute('aria-expanded'), 'false');
 });
 
 test('sorting keeps every details row directly under its game', () => {
   const table = makeTable('catalogue', HEADS, withDetails());
   const page = fakePage(() => [table]);
   page.click(table.ths[1]);
-  assert.deepEqual(table.order(), ['Candy', 'details:candy', 'Ganja Ranch', 'details:ganja', 'Hog Stampede', 'details:hog']);
+  assert.deepEqual(table.order(), ['Berry', 'details:berry', 'Metro Night Run', 'details:metro-night-run', 'Pixel Geyser', 'details:pixel-geyser']);
 });
 
 test('an opened details row is open again after the refresh replaces the table', () => {
   let table = makeTable('catalogue', HEADS, withDetails());
   const page = fakePage(() => [table]);
-  page.click(table.button('ganja'));
+  page.click(table.button('metro-night-run'));
   table = makeTable('catalogue', HEADS, withDetails());
   page.refreshed();
-  assert.equal(table.detailsRow('ganja').classList.contains('open'), true);
-  assert.equal(table.button('ganja').getAttribute('aria-expanded'), 'true');
-  assert.equal(table.detailsRow('candy').classList.contains('open'), false);
+  assert.equal(table.detailsRow('metro-night-run').classList.contains('open'), true);
+  assert.equal(table.button('metro-night-run').getAttribute('aria-expanded'), 'true');
+  assert.equal(table.detailsRow('berry').classList.contains('open'), false);
 });
