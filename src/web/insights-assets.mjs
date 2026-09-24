@@ -356,6 +356,40 @@ html.js .sidebar nav a:last-child{display:block}
 html.js .sidebar nav a.active::before{left:0;right:auto;top:10px;bottom:10px;width:3px;height:auto}}
 @media(max-width:600px){.app-header{gap:10px}.breadcrumbs li:not(:last-child){display:none}.setting-row{flex-wrap:wrap}.form-grid{max-width:none}.heading-actions{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+.kpi{padding:18px 18px 14px;border-radius:var(--radius);border:1px solid var(--stroke);background:linear-gradient(180deg,var(--surface-2),var(--surface-1));box-shadow:var(--lift);min-width:0;display:flex;flex-direction:column}
+.kpi-label{font-size:12px;color:#b5c2d4;font-weight:500}
+.kpi-value{font-size:28px;font-weight:600;letter-spacing:-.8px;line-height:1.15;margin:10px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kpi-value.good{color:var(--good)}.kpi-value.bad{color:var(--bad)}
+.kpi-delta{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}.kpi-delta span{font-weight:400;color:var(--dim)}
+.kpi-delta.up{color:var(--good)}.kpi-delta.down{color:var(--bad)}.kpi-delta.flat{color:#c5d0de}.kpi-delta.none{color:var(--dim);font-weight:400}
+.kpi-visual{margin-top:auto;padding-top:12px;min-height:46px}
+.kpi-spark svg{width:100%;height:34px;display:block}.kpi-spark .zero{stroke:#26324a;stroke-width:1}
+.kpi-spark.good .spark-line{stroke:var(--good)}.kpi-spark.bad .spark-line{stroke:var(--bad)}.kpi-spark.blue .spark-line{stroke:#4a8ff5}
+.kpi-spark.good .spark-dot{fill:var(--good)}.kpi-spark.bad .spark-dot{fill:var(--bad)}.kpi-spark.blue .spark-dot{fill:#4a8ff5}
+.rtp-bullet{width:100%;height:30px;display:block;overflow:visible}.rtp-bullet .track{fill:#1d2636}.rtp-bullet .tick{stroke:#8d9bb0;stroke-width:1.5}.rtp-bullet .bar-pos{fill:var(--good)}.rtp-bullet .bar-neg{fill:var(--bad)}.rtp-bullet .axis-label{fill:var(--dim);font-size:8px}
+.today-panel .chart-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.chart-stat{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}.chart-stat b{color:var(--text);font-size:15px;font-weight:600}.chart-stat b.good{color:var(--good)}.chart-stat b.bad{color:var(--bad)}
+.today-hero .chart-stat b{font-size:20px}
+.today-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.today-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:var(--dim);margin:0 0 8px}.today-legend span{display:inline-flex;align-items:center;gap:6px}.today-legend .swatch{border-radius:2px;flex:none}
+.chart .future-zone{fill:rgba(148,163,184,.045)}
+.chart .now-line{stroke:#44516a;stroke-width:1;stroke-dasharray:2 3}
+.chart .now-dot{stroke:var(--panel);stroke-width:2}
+.chart .now-value{fill:var(--text);font-size:12px;font-weight:600}
+.chart .area-gain{fill:var(--good);fill-opacity:.16}.chart .area-loss{fill:var(--bad);fill-opacity:.16}
+.chart .empty-note{font-size:12px}
+.heat-grid .cell-missed{fill:none;stroke:#3a4760;stroke-width:1;stroke-dasharray:3 2}
+.heat-grid .cell-future{fill:rgba(148,163,184,.035)}
+.heat-grid .hit:hover .cell{stroke:var(--text);stroke-width:1}
+.heat-grid a .bar-label{fill:#c5d0de}.heat-grid a:hover .bar-label{fill:var(--mint)}
+.month-strip{display:flex;align-items:center;gap:14px 36px;flex-wrap:wrap}
+.month-strip h2{font-size:13px;color:var(--dim);font-weight:500;letter-spacing:.2px}
+.month-stat>span{display:block;font-size:11px;color:var(--dim)}.month-stat b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.month-link{margin-left:auto;color:var(--link);font-size:12px;font-weight:500}
+@media(max-width:1300px){.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.today-pair{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.wide-chart>svg{min-width:760px}.kpi-grid{gap:10px}.kpi{padding:14px 13px 12px}.kpi-value{font-size:22px}.kpi-label{font-size:11px}.month-link{margin-left:0}}
 `;
 
 export const INSIGHTS_JS = `

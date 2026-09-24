@@ -243,8 +243,11 @@ its slot is skipped rather than queued.
 `dayBoundaryUtcHour` sets when "today" rolls over for:
 
 - the terminal dashboard's DAY columns, the TODAY tab and the daily view;
-- the "since" tiles on the web dashboard's **Live operations** page;
-- **P/L today** on the **Overview**.
+- the "since" tiles on the web dashboard's **Live operations** page.
+
+The web **Overview** is always the UTC day, from 00:00:00Z, whatever this is
+set to: it is there to line up with the Engine studio dashboard, whose day is
+the UTC day.
 
 It is `0` (00:00 UTC) in the shipped `config.json`. Set it in
 `config.local.json` to roll at another hour, then restart.

@@ -3,196 +3,173 @@ import assert from 'node:assert/strict';
 import { renderHome } from '../src/web/views/home.mjs';
 
 const money = { unitsPerDollar: 1_000_000, profitShare: 0.1, expectedShare: 0.075 };
-const berry = { name: 'berry', label: 'Berry', count: 100, turnoverUsd: 500, profitUsd: -12.5, dayProfitUsd: 3, online: 4 };
-const galaxy = { name: 'pixel-geyser', label: 'Pixel Geyser', count: 50, turnoverUsd: 250, profitUsd: 20, dayProfitUsd: -1, online: 0 };
-// Live in the catalogue, nothing on the roster yet - every figure unmeasured.
-const pending = { name: 'pixel-nest', label: 'Pixel Nest', pending: true, count: null, turnoverUsd: null, profitUsd: null, dayProfitUsd: null, online: 1 };
-const titles = [
-  { slug: 'berry', name: 'Berry', isLive: true, published: true, approval: 'responded', rating: 60 },
-  { slug: 'metro-night-run', name: 'Metro Night Run', isLive: false, published: true, approval: 'new', rating: 30 },
-  { slug: 'baseline', name: 'Base Line', isLive: false, published: false, approval: null, rating: null },
-];
-const math = { 'metro-night-run': { edge: 0.045, maxWin: 50000, version: 6, modes: { BASE: {}, ANTE: {}, VIPER_VAULT: {} } } };
-const base = { meta: { team: 'acme-studios' }, stale: false, ageMs: 0, now: Date.parse('2026-09-22T12:00:00Z'), money, math, titles };
-const render = (over = {}) => String(renderHome({ ...base, rows: [berry, galaxy, pending], ...over }));
-const section = (out, heading) => out.slice(out.indexOf(heading));
-const between = (out, from, to) => { const a = out.indexOf(from); return out.slice(a, out.indexOf(to, a)); };
-const games = (out) => between(out, '<h2>Games</h2>', '<h2>Not yet live</h2>');
+const MIN = 60_000, H = 3_600_000, DAY = 86_400_000;
+const NOW = Date.parse('2026-09-24T04:10:00Z');
+const MIDNIGHT = Date.parse('2026-09-24T00:00:00Z');
+const sample = (ts, fields) => ({ ts, fields });
 
-test('every game on the roster links to its own game page', () => {
+// Cumulative readings every 15 minutes, 23:45 the day before yesterday's
+// midnight to now. Each step adds 5 bets, $50 turnover and $2 gross, unless
+// `today` or `yesterday` says otherwise for the steps on that side of 00:00Z.
+function twoDay({ today = {}, yesterday = {}, from = MIDNIGHT - DAY - 15 * MIN } = {}) {
+  const rate = (ts) => ({ bets: 5, turnover: 50_000_000, profit: 2_000_000, ...(ts > MIDNIGHT ? today : yesterday) });
+  const out = [];
+  let c = 0, t = 0, p = 0;
+  for (let ts = MIDNIGHT - DAY - 15 * MIN; ts <= NOW; ts += 15 * MIN) {
+    if (out.length) { const r = rate(ts); c += r.bets; t += r.turnover; p += r.profit; }
+    if (ts >= from) out.push(sample(ts, { count: c, turnover: t, profit: p }));
+  }
+  return out;
+}
+const online = (from = MIDNIGHT - DAY - 30 * MIN) => {
+  const out = [];
+  for (let ts = from; ts <= NOW; ts += 5 * MIN) out.push(sample(ts, { onlinePlayers: ts >= MIDNIGHT ? 7 : 5 }));
+  return out;
+};
+
+const berry = { name: 'berry', label: 'Berry', count: 100, turnoverUsd: 500, profitUsd: -12.5, online: 4 };
+const geyser = { name: 'pixel-geyser', label: 'Pixel Geyser', count: 50, turnoverUsd: 250, profitUsd: 20, online: 0 };
+const pending = { name: 'pixel-nest', label: 'Pixel Nest', pending: true, count: null, turnoverUsd: null, profitUsd: null, online: 1 };
+const base = {
+  meta: { team: 'acme-studios' }, stale: false, ageMs: 0, now: NOW, money, pollMinutes: 2.5, online: 5,
+  rows: [berry, geyser, pending],
+  teamTrail: twoDay(),
+  onlineSince: online(),
+  gameTrails: {
+    berry: twoDay({ from: MIDNIGHT - 15 * MIN }),
+    'pixel-geyser': twoDay({ from: MIDNIGHT - 15 * MIN, today: { bets: 1, turnover: 10_000_000, profit: -4_000_000 } }),
+  },
+};
+const render = (over = {}) => String(renderHome({ ...base, ...over }));
+const between = (out, from, to) => { const a = out.indexOf(from); return a === -1 ? '' : out.slice(a, out.indexOf(to, a + from.length)); };
+const kpi = (out, label) => between(out, `<div class="kpi-label">${label}</div>`, '</article>');
+
+test('the landing is about today, since 00:00:00 UTC, and says how much of it has passed', () => {
   const out = render();
-  for (const slug of ['berry', 'pixel-geyser', 'pixel-nest']) assert.match(out, new RegExp(`href="/game/${slug}"`), slug);
+  assert.match(out, /<h1>Today<span>\.<\/span><\/h1>/);
+  assert.match(out, /since 00:00:00 UTC/i);
+  assert.match(out, /Thursday 24 September/);
+  assert.match(out, /4h 10m of play/);
 });
 
-test('each live game shows its bets, turnover and studio profit/loss', () => {
+test('five KPI tiles lead the page: studio P/L, turnover, bets, players online and RTP', () => {
   const out = render();
-  assert.match(out, /Berry/);
-  assert.match(out, />100</);
-  assert.match(out, /\$500\.00/);
-  assert.match(out, /<span class="bad">-\$12\.50<\/span>/, 'a loss renders red');
-  assert.match(out, /<span class="good">\+\$20\.00<\/span>/, 'a win renders green');
+  const labels = [...out.matchAll(/<div class="kpi-label">([^<]+)<\/div>/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ['Studio P/L today', 'Turnover today', 'Bets today', 'Players online', 'RTP today']);
+  // 16 steps of 15 minutes, 00:15 to 04:00.
+  assert.match(kpi(out, 'Studio P/L today'), /<div class="kpi-value good">\+\$3\.20<\/div>/);
+  assert.match(kpi(out, 'Turnover today'), /\$800\.00/);
+  assert.match(kpi(out, 'Bets today'), />80</);
+  assert.match(kpi(out, 'Players online'), />5</);
+  assert.match(kpi(out, 'RTP today'), /96\.00%/);
 });
 
-test('the total row sums the measured games and ignores the unmeasured one', () => {
-  const total = section(render(), 'Total');
-  assert.match(total, />150</, 'bets 100 + 50');
-  assert.match(total, /\$750\.00/, 'turnover 500 + 250');
-  assert.match(total, /\+\$7\.50/, 'profit -12.50 + 20');
+test('each KPI compares against the same hours of yesterday, with an arrow and words, not colour alone', () => {
+  const level = render();
+  assert.match(kpi(level, 'Studio P/L today'), /class="kpi-delta flat">= level <span>vs yesterday<\/span>/);
+  assert.match(kpi(level, 'Players online'), /class="kpi-delta flat">= level <span>vs yesterday<\/span>/);
+  const busier = render({ teamTrail: twoDay({ today: { turnover: 100_000_000, profit: -1_000_000 } }) });
+  assert.match(kpi(busier, 'Turnover today'), /class="kpi-delta up">▲ 100% <span>vs yesterday<\/span>/);
+  assert.match(kpi(busier, 'Studio P/L today'), /class="kpi-delta down">▼ -\$4\.80 <span>vs yesterday<\/span>/);
+  assert.match(kpi(busier, 'RTP today'), /class="kpi-delta flat">▲ 5\.00pp <span>vs yesterday<\/span>/, 'RTP moves are not called good or bad');
 });
 
-test('a roster of nothing but unmeasured games totals to a dash, not a confident zero', () => {
-  const out = render({ rows: [pending] });
-  assert.doesNotMatch(out, /\$0\.00/);
+test('with no yesterday in the trail, the tiles say there is nothing to compare, rather than inventing a change', () => {
+  const out = render({ teamTrail: twoDay({ from: MIDNIGHT - 30 * MIN }), onlineSince: online(MIDNIGHT) });
+  for (const label of ['Studio P/L today', 'Turnover today', 'Bets today', 'Players online']) {
+    assert.match(kpi(out, label), /no yesterday to compare/, label);
+    assert.doesNotMatch(kpi(out, label), /[▲▼]/, label);
+  }
 });
 
-test('a measured zero profit still renders as $0.00, not as a dash', () => {
-  const out = render({ rows: [{ ...berry, profitUsd: 0, dayProfitUsd: 0 }] });
-  assert.match(out, /<span class="good">\$0\.00<\/span>/, 'zero is green by the standing ruling');
+test('the hero is the running studio P/L across the whole day, today against yesterday', () => {
+  const panel = between(render(), 'id="p-running-studio-p-l"', '</section>');
+  assert.match(panel, /<h2>Running studio P\/L<\/h2>/);
+  assert.match(panel, /class="chart day-curve"/);
+  assert.match(panel, />Today</);
+  assert.match(panel, />Yesterday</);
+  assert.match(panel, /class="area-gain"/);
 });
 
-test('titles not yet live are listed with their status and approval stage, and link to a game page', () => {
-  const out = section(render(), 'Not yet live');
-  assert.match(out, /href="\/game\/metro-night-run"/);
-  assert.match(out, /Metro Night Run/);
-  assert.match(out, /Published · not live/);
-  assert.match(out, />new</);
-  assert.match(out, /Base Line/);
-  assert.match(out, /Unpublished/);
+test('turnover and P/L are drawn hour by hour, with the hours still to come shaded', () => {
+  const out = render();
+  const turnover = between(out, 'id="p-turnover-by-hour"', '</section>');
+  assert.match(turnover, /class="future-zone"/);
+  assert.match(turnover, /class="today-legend"/);
+  assert.match(turnover, /Berry/);
+  const pnl = between(out, 'id="p-studio-p-l-by-hour"', '</section>');
+  assert.match(pnl, /class="future-zone"/);
+  assert.match(pnl, /class="bar-neg"/, 'Pixel Geyser\'s losses outweigh Berry\'s gains each hour');
 });
 
-test('a live title is not repeated in the not-yet-live table', () => {
-  assert.doesNotMatch(section(render(), 'Not yet live'), /href="\/game\/berry"/);
+test('the heat grid puts every game that played today against the hours, each row linking to its game', () => {
+  const grid = between(render(), 'id="p-turnover-by-game-and-hour"', '</section>');
+  assert.match(grid, /<a href="\/game\/berry">/);
+  assert.match(grid, /<a href="\/game\/pixel-geyser">/);
+  assert.doesNotMatch(grid, /Pixel Nest/, 'a game with nothing today has no row');
 });
 
-test('a not-yet-live title shows its captured math summary, or a dash when none was captured', () => {
-  const out = section(render(), 'Not yet live');
-  assert.match(out, /95\.50%/, 'RTP = 1 - edge');
-  assert.match(out, />3</, 'three captured modes');
-  assert.match(out, /50,000x/);
-  const baseline = out.slice(out.indexOf('Base Line'));
-  assert.doesNotMatch(baseline.slice(0, baseline.indexOf('</tr>')), /%/, 'no RTP invented for a title with no math');
+test('in the grid, hours before a game joined the roster are blank, while an hour its trail missed is an outline', () => {
+  const late = twoDay({ from: MIDNIGHT + 2 * H + 25 * MIN });
+  const gappy = twoDay({ from: MIDNIGHT - 15 * MIN }).filter((s) => s.ts <= MIDNIGHT + 15 * MIN || s.ts >= MIDNIGHT + 2 * H);
+  const grid = between(render({ gameTrails: { berry: late, 'pixel-geyser': gappy } }), 'id="p-turnover-by-game-and-hour"', '</section>');
+  const row = (slug) => between(grid, `<a href="/game/${slug}">`, '</g><g>') || grid.slice(grid.indexOf(`<a href="/game/${slug}">`));
+  assert.doesNotMatch(row('berry'), /cell-missed/, 'not watching yet is not a miss');
+  assert.match(row('pixel-geyser'), /cell-missed/, 'a gap in a watched trail is');
 });
 
-test('an empty catalogue says there is nothing unreleased rather than rendering a bare table', () => {
-  assert.match(render({ titles: undefined }), /No titles waiting/i);
+test('games today: P/L by game and each game\'s share of turnover', () => {
+  const out = render();
+  const bars = between(out, 'id="p-studio-p-l-by-game"', '</section>');
+  assert.match(bars, /class="bar-pos"/);
+  assert.match(bars, /class="bar-neg"/, 'Pixel Geyser lost today');
+  const ring = between(out, 'id="p-share-of-turnover"', '</section>');
+  assert.match(ring, /class="chart donut"/);
+  assert.match(ring, /<span class="chart-stat"><b>Berry<\/b> 83%<\/span>/, 'the headline names the largest slice, whatever its colour slot');
+  const many = Array.from({ length: 12 }, (_, i) => ({ name: `g${i}`, label: `Game ${i}` }));
+  const trails = Object.fromEntries(many.map((g, i) => [g.name, twoDay({ from: MIDNIGHT - 15 * MIN, today: { turnover: (i + 1) * 1_000_000 } })]));
+  const crowded = between(render({ rows: many, gameTrails: trails }), 'id="p-share-of-turnover"', '</section>');
+  assert.match(crowded, /<span class="chart-stat"><b>Game \d+<\/b>/, 'never "Other", even when Other is the biggest slice');
 });
 
-test('the overview carries no per-mode drilldown', () => {
-  assert.doesNotMatch(render(), /\/mode\//);
+test('players online runs across the day too, against yesterday', () => {
+  const panel = between(render(), 'id="p-players-online"', '</section>');
+  assert.match(panel, /class="chart day-curve"/);
+  assert.match(panel, /peak <b>7<\/b> at 00:00Z</);
+});
+
+test('month-to-date shrinks to one strip at the foot, pointing to the Games page', () => {
+  const strip = between(render(), 'class="panel month-strip"', '</section>');
+  assert.match(strip, /This month/);
+  assert.match(strip, /\+\$7\.50/, 'studio P/L -12.50 + 20');
+  assert.match(strip, /\$750\.00/);
+  assert.match(strip, />150</);
+  assert.match(strip, /href="\/games"/);
+});
+
+test('the landing carries no tables: the catalogue and the month table live on the Games page', () => {
+  const out = render();
+  assert.doesNotMatch(out, /<table/);
+  assert.doesNotMatch(out, /<h2>Not yet live<\/h2>/);
+});
+
+test('a trail that starts after midnight is flagged, with the time it starts', () => {
+  const out = render({ teamTrail: twoDay({ from: MIDNIGHT + H }) });
+  assert.match(out, /class="notice warning">[^<]*01:00Z/);
+});
+
+test('an empty collector draws the empty day, with dashes rather than confident zeros', () => {
+  const out = render({ rows: [], teamTrail: [], onlineSince: [], gameTrails: {}, online: null });
+  assert.match(out, /Nothing measured yet today/);
+  assert.doesNotMatch(between(out, 'class="kpi-grid"', 'id="p-running-studio-p-l"'), /\$0\.00|>0</);
+  assert.match(out, /No game has taken a bet today yet/);
 });
 
 test('untrusted game names from the API cannot inject markup', () => {
-  const out = render({ rows: [{ ...berry, label: '<img src=x onerror=1>' }],
-    titles: [{ slug: 'evil', name: '<script>x</script>', isLive: false, published: true, approval: '<i onmouseover=1>' }] });
+  const out = render({ rows: [{ ...berry, label: '<img src=x onerror=1>' }, geyser] });
   assert.doesNotMatch(out, /<img src=x/);
-  assert.doesNotMatch(out, /<script>x/);
-  assert.doesNotMatch(out, /<i onmouseover/);
 });
 
-// ------------------------------------------------------------ Games section
-test('the Games section lists every catalogue title, live first, with a link to its own page', () => {
-  const out = games(render());
-  assert.match(out, /3 titles/);
-  for (const slug of ['berry', 'metro-night-run', 'baseline']) assert.match(out, new RegExp(`href="/game/${slug}"`), slug);
-  assert.ok(out.indexOf('Berry') < out.indexOf('Base Line'), 'live before dark');
-  assert.ok(out.indexOf('Base Line') < out.indexOf('Metro Night Run'), 'then by name');
-});
-
-test('each title shows the studio dashboard star rating out of three, or Unrated', () => {
-  const out = games(render());
-  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
-  assert.match(row('Berry'), /aria-label="2 of 3 stars"/);
-  assert.match(row('Metro Night Run'), /aria-label="1 of 3 stars"/);
-  assert.match(row('Base Line'), /Unrated/);
-  assert.doesNotMatch(row('Base Line'), /stars"/, 'no stars invented for an unrated title');
-});
-
-test('a live title shows Live where its approval stage goes; a dark one shows its stage, and its status in the details', () => {
-  const out = games(render());
-  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
-  const details = (slug) => { const a = out.indexOf(`data-details-for="${slug}"`); return out.slice(a, out.indexOf('</tr>', a)); };
-  assert.doesNotMatch(out, /<th[^>]*>Status<\/th>/, 'no Status column');
-  assert.match(row('Berry'), /<span class="pill live">Live<\/span>/);
-  assert.doesNotMatch(row('Berry'), />responded</);
-  assert.match(details('berry'), />responded</);
-  assert.match(row('Metro Night Run'), /<td>new<\/td>/);
-  assert.match(details('metro-night-run'), />Published · not live</);
-  assert.match(details('baseline'), />Unpublished</);
-});
-
-test('each title links to its page on the Engine studio, in a new tab, and the link goes when no team is known', () => {
-  const out = games(render());
-  assert.match(out, /<a class="engine-link" href="https:\/\/studio\.engine\.io\/teams\/acme-studios\/games\/berry" target="_blank" rel="noopener noreferrer">/);
-  assert.match(out, /studio\.engine\.io\/teams\/acme-studios\/games\/metro-night-run"/);
-  assert.doesNotMatch(games(render({ meta: {} })), /studio\.engine\.io/);
-});
-
-test('the Engine link encodes a hostile slug and team rather than trusting them', () => {
-  const out = games(render({ meta: { team: 'a"b' }, titles: [{ slug: 'x/y?z', name: 'X', isLive: true, rating: 60 }] }));
-  assert.doesNotMatch(out, /teams\/a"b/);
-  assert.match(out, /teams\/a%22b\/games\/x%2Fy%3Fz/);
-});
-
-test('the money table is titled as the live games this month, so the two tables cannot be confused', () => {
-  const out = render();
-  assert.match(out, /<h2>Live games this month<\/h2>/);
-  assert.equal((out.match(/<h2>Games<\/h2>/g) ?? []).length, 1);
-});
-
-test('a missing catalogue still renders the Games section, empty', () => {
-  assert.match(games(render({ titles: undefined })), /No titles in the catalogue/);
-});
-
-test('the Games section names each roster game\'s revenue model from its rate, and a dash for a title with none', () => {
-  const geyser = { slug: 'pixel-geyser', name: 'Pixel Geyser', isLive: true, published: true, approval: 'responded', rating: 60 };
-  const out = games(render({ rows: [{ ...berry, rate: 1000 }, { ...galaxy, rate: 500 }, pending], titles: [...titles, geyser] }));
-  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
-  assert.match(row('Berry'), /<span class="model">10% revenue share<\/span>/);
-  assert.match(row('Pixel Geyser'), /<span class="model split">5% GGR, split across providers<\/span>/);
-  assert.doesNotMatch(row('Metro Night Run'), /%/, 'not on the roster: no rate to report');
-  assert.match(row('Metro Night Run'), /reports a revenue rate only for a game on the roster/);
-  assert.match(out, /<th data-sort="text">Revenue model<\/th>/);
-});
-
-test('a roster row without a rate shows a dash, never 0%', () => {
-  const out = games(render({ rows: [{ ...berry, rate: null }, { ...galaxy }] }));
-  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
-  assert.doesNotMatch(row('Berry'), /GGR|revenue share/);
-  assert.match(row('Berry'), /reports a revenue rate only for a game on the roster/);
-});
-
-const live = (out) => between(out, '<h2>Live games this month</h2>', '<h2>Games</h2>');
-
-test('the live games table is sortable: each heading says how it sorts and each figure carries its raw value', () => {
-  const out = live(render());
-  assert.match(out, /<table data-sortable="live-games">/);
-  assert.match(out, /<th data-sort="text">Game<\/th>/);
-  for (const col of ['Bets', 'Turnover', 'Studio P/L', 'P/L today', 'Online now']) assert.ok(out.includes(`<th data-sort="number">${col}</th>`), col);
-  assert.match(out, /<td data-value="500">\$500\.00<\/td>/, 'turnover carries the unformatted number');
-  assert.match(out, /<td data-value="-12.5"><span class="bad">-\$12\.50<\/span><\/td>/, 'a loss carries its sign');
-  assert.match(out, /<td data-value="100">100<\/td>/, 'bets carry the count');
-});
-
-test('an unmeasured figure carries no sort value, so it sorts last rather than as a zero', () => {
-  const row = between(live(render()), 'pixel-nest', '</tr>');
-  assert.doesNotMatch(row, /data-value="(?:|0|null|undefined|NaN)"/);
-  assert.match(row, /<td data-value="1">1<\/td>/, 'the one measured figure (online) still carries its value');
-});
-
-test('the total row stays in the footer, outside what sorting reorders', () => {
-  const out = live(render());
-  assert.match(out, /<tfoot><tr><td>Total<\/td>/);
-  assert.doesNotMatch(between(out, '<tfoot>', '</tfoot>'), /data-value/);
-});
-
-test('the Games and Not-yet-live tables sort too, with the rating and captured math as numbers', () => {
-  const out = render();
-  assert.match(games(out), /<table data-sortable="catalogue">/);
-  assert.match(games(out), /<th data-sort="number">Rating<\/th>/);
-  assert.match(games(out), /<td data-value="60">/, 'the raw rating, not the star count');
-  assert.match(games(out), /<th>Engine<\/th>/, 'a column of identical links does not sort');
-  const waiting = section(out, '<h2>Not yet live</h2>');
-  assert.match(waiting, /<table data-sortable="waiting">/);
-  assert.match(waiting, /<td data-value="50000">50,000x<\/td>/);
-  assert.match(waiting, /<td data-value="3">3<\/td>/);
+test('the landing is the active Overview entry', () => {
+  assert.match(render(), /<a class="active" href="\/" aria-current="page">/);
 });

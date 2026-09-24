@@ -91,7 +91,7 @@ In sidebar order:
 
 | Page | Route | What it shows |
 |---|---|---|
-| [Overview](overview.md) | `/` | One line per game, month to date, and the titles not yet live |
+| [Overview](overview.md) | `/` | Today since 00:00:00 UTC in charts: KPI tiles, the running P/L, the day hour by hour and game by game |
 | [Games](games.md) | `/games` | The catalogue: every title with its Engine rating, status, revenue model and approval stage, and the titles not yet live |
 | [Analysis](analysis.md) | `/analysis` | Every chart with its conclusion, scoped by a time picker |
 | [Settlement](settlement.md) | `/settlement` | What would be settled if the month ended now, and whether the endpoints agree |

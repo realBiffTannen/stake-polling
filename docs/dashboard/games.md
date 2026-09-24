@@ -13,9 +13,9 @@ Route: `/games`
 
 *From the demo: every game and figure is made up.*
 
-The studio's catalogue, every title live or not. The same two tables sit under
-the money table on the [Overview](overview.md); they are drawn by the same
-code, so the two pages never disagree.
+The studio's catalogue, every title live or not, and the titles not yet live.
+The [Overview](overview.md) is today in charts; this page is where every game
+is listed.
 
 ## Games
 
@@ -53,5 +53,4 @@ $0.00 would claim somebody watched a quiet month.
 
 Click a column heading to sort by it, and again to reverse. Numbers start
 biggest first, text A to Z; a figure nobody measured sorts last either way.
-The choice is remembered for the tab, so it survives the live refresh. Every
-table on the Overview sorts the same way.
+The choice is remembered for the tab, so it survives the live refresh.

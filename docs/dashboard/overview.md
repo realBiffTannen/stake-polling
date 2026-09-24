@@ -2,47 +2,76 @@
 title: Overview
 parent: The web dashboard
 nav_order: 1
-description: "The landing page: one line per live game, month to date, with the catalogue and the titles not yet live beneath. Every table sorts by any column."
+description: "The landing page: today since 00:00:00 UTC, drawn - KPI tiles against the same hours of yesterday, the running studio P/L, hour-by-hour turnover and P/L, a game-by-hour heat grid, P/L and turnover share by game, and players online."
 ---
 
 # Overview
 
 Route: `/`
 
-The landing page. Every game this month, one line each, and nothing deeper.
-Every game name opens its [game page](game.md), where the bet modes, math and
-players are.
+![The overview page of the demo dashboard: today's KPI tiles, the running studio P/L against yesterday, and the day hour by hour](../screenshots/overview.png)
 
-## Summary cards
+*From the demo: every game and figure is made up.*
 
-| Card | Shows |
-|---|---|
-| Studio P/L this month | The studio's share of gross gaming revenue, month to date, with today's figure beneath |
-| Bets this month | One bet is one game played |
-| Turnover this month | In US dollars |
-| Online now | Players online across live games |
+The landing page is **today**, drawn rather than tabulated. Today means since
+**00:00:00 UTC**, the same day the Engine studio dashboard reports, so the two
+can be read side by side. It is pinned to midnight UTC whatever
+[`dayBoundaryUtcHour`](../configuration.md#the-accounting-day) says.
 
-## Live games this month
+Every chart is built from the collector's own trail and refreshes with each
+poll. A stretch the collector missed is left empty, never drawn as zero, and
+the hours still to come are shaded.
 
-One row per roster game, sorted by turnover, with a total row:
+## KPI tiles
 
-| Column | Meaning |
-|---|---|
-| Game | Opens the game page |
-| Bets | Month to date |
-| Turnover | Month to date |
-| Studio P/L | Month to date, the studio's share |
-| P/L today | Since the accounting-day boundary (00:00Z by default; see [The accounting day](../configuration.md#the-accounting-day)) |
-| Online now | Players on that game at the last poll |
+| Tile | Shows | Compared with |
+|---|---|---|
+| Studio P/L today | The studio's share of gross gaming revenue since 00:00Z, with a sparkline of the day | Dollars up or down on the same hours of yesterday |
+| Turnover today | Since 00:00Z, with turnover per hour | Percent on the same hours of yesterday |
+| Bets today | Since 00:00Z, with bets per hour | Percent on the same hours of yesterday |
+| Players online | At the last poll, with the day's line | The reading nearest this time yesterday |
+| RTP today | Gross, `1 - profit / turnover`, on a bar against the 100% break-even | Points on the same hours of yesterday, drawn neutral - RTP is luck, not a result |
 
-Month to date runs from the 1st at 00:00Z. A game that is live but has no
-figures yet shows dashes and the tag **live, nothing yet**, rather than `$0.00`.
+The comparison needs the trail to reach yesterday's midnight; without it the
+tile says *no yesterday to compare* rather than inventing a change. Studio-wide
+figures come off the team trail through the same replica-lag filter as the
+[Settlement](settlement.md) page, so its *today so far* and this page agree.
 
-Click a column heading to sort by it, and again to reverse. Numbers start
-biggest first, text A to Z; a figure nobody measured sorts last either way, and
-the Total row stays at the bottom. The choice is remembered for the tab.
+## Running studio P/L
 
-## Games, and Not yet live
+The day's running studio P/L on a fixed 00:00-24:00 axis, so where the line
+stops is how far through the day it is. Above zero is shaded green, below red.
+Yesterday's whole day runs behind it as a dashed line. Hover for any quarter
+hour's figures, today's and yesterday's.
 
-The catalogue and the titles not yet live, exactly as the [Games](games.md)
-page shows them - the same code draws both.
+## Turnover by hour, and Studio P/L by hour
+
+The 24 clock hours of the day. Turnover is stacked by game in the same colours
+as the share donut: the seven games with the largest share take a colour of
+their own, the rest are *Other*. P/L per hour stands either side of a zero
+line. The hour still filling says so in its readout.
+
+## Turnover by game and hour
+
+Every game that has taken a bet today against the 24 hours, each cell shaded
+by that hour's turnover on a square-root scale (so a quiet game still shows
+against a busy one). Hover a cell for its turnover, bets and studio P/L. A
+dashed outline is an hour the collector missed; a blank cell is one that has
+not happened yet, or came before the game joined the roster. Each game's name
+opens its [game page](game.md).
+
+## Studio P/L by game, and Share of turnover
+
+Today's studio P/L per game, biggest winner first, and each game's share of
+today's turnover.
+
+## Players online
+
+Players online at each poll since 00:00Z, with yesterday's day behind it.
+
+## This month
+
+One strip at the foot: studio P/L, turnover and bets month to date, and a link
+to the [Games](games.md) page, which carries the catalogue and the titles not
+yet live. Per-game month figures are on [Live operations](live.md) and in each
+title's row on the Games page.

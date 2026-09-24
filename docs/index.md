@@ -16,7 +16,7 @@ stats and balance.
 [Try the live demo]({{ site.demo_url }}){: .btn .btn-primary .mr-2 }
 [Get started](getting-started.md){: .btn }
 
-![The overview page of the demo dashboard: twenty made-up games this month](screenshots/overview.png)
+![The overview page of the demo dashboard: today in charts, from made-up games](screenshots/overview.png)
 
 *From the demo: every game and figure is made up.*
 
