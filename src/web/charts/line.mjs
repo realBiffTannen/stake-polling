@@ -29,6 +29,11 @@ export function lineChart({ series = [], labels = [], width = 900, height = 280,
     right: linearScale({ domain: axes.right.domain, range: [pad.top + plotH, pad.top] }),
   };
   const every = Math.max(1, Math.ceil(labels.length / 10));
+  // A series that crosses zero gets a zero line the eye can rest on: the
+  // gridlines are all alike, and "which side of nothing" is the one question
+  // a P/L chart has to answer at a glance. An axis that starts or ends at zero
+  // already has it as an edge, so none is drawn.
+  const zero = axes.left.domain[0] < 0 && axes.left.domain[1] > 0 ? ys.left(0) : null;
 
   const paths = series.map((s) => {
     const scale = ys[s.axis === 'right' ? 'right' : 'left'];
@@ -61,6 +66,7 @@ export function lineChart({ series = [], labels = [], width = 900, height = 280,
     ${ticks.left.map(t => html`<g><line class="gridline" x1="${pad.left}" x2="${pad.left + plotW}" y1="${ys.left(t)}" y2="${ys.left(t)}"/>
       <text class="axis-label" x="${pad.left - 8}" y="${ys.left(t) + 4}" text-anchor="end">${format(t)}</text></g>`)}
     ${ticks.right.map(t => html`<text class="axis-label" x="${pad.left + plotW + 8}" y="${ys.right(t) + 4}" text-anchor="start">${format(t)}</text>`)}
+    ${zero === null ? null : html`<line class="zero-line" x1="${pad.left}" x2="${pad.left + plotW}" y1="${zero.toFixed(1)}" y2="${zero.toFixed(1)}"/>`}
     ${labels.map((label, i) => i % every === 0 || i === labels.length - 1
       ? html`<text class="axis-label" x="${xs(i)}" y="${height - 10}" text-anchor="middle">${label}</text>` : null)}
     ${paths}

@@ -56,11 +56,19 @@ function model(rate) {
   return html`<span class="model${m.split ? ' split' : ''}">${m.label}</span>`;
 }
 
+/**
+ * A figure with its raw value for sorting (app.js reads data-value). An
+ * unmeasured one carries none, so it sorts last rather than as a zero.
+ */
+function numCell(value, rendered) {
+  return blank(value) || !Number.isFinite(Number(value)) ? html`<td>${rendered}</td>` : html`<td data-value="${Number(value)}">${rendered}</td>`;
+}
+
 function catalogueRow(title, team, rate) {
   const url = engineGameUrl(team, title.slug);
   return html`<tr>
     <td><a class="game-link" href="${gameHref(title.slug)}">${title.name}</a></td>
-    <td>${stars(title.rating)}</td>
+    ${numCell(starRating(title.rating) === null ? null : title.rating, stars(title.rating))}
     <td>${liveness(title)}</td>
     <td>${model(rate)}</td>
     <td>${title.approval ?? DASH}</td>
@@ -81,9 +89,9 @@ function waitingRow(title, math) {
     <td><a class="game-link" href="${gameHref(title.slug)}">${title.name}</a></td>
     <td>${status(title)}</td>
     <td>${title.approval ?? DASH}</td>
-    <td>${blank(math?.edge) ? DASH : pct((1 - Number(math.edge)) * 100)}</td>
-    <td>${math?.modes ? int(Object.keys(math.modes).length) : DASH}</td>
-    <td>${blank(math?.maxWin) ? DASH : `${int(math.maxWin)}x`}</td></tr>`;
+    ${numCell(blank(math?.edge) ? null : (1 - Number(math.edge)) * 100, blank(math?.edge) ? DASH : pct((1 - Number(math.edge)) * 100))}
+    ${numCell(math?.modes ? Object.keys(math.modes).length : null, math?.modes ? int(Object.keys(math.modes).length) : DASH)}
+    ${numCell(math?.maxWin, blank(math?.maxWin) ? DASH : `${int(math.maxWin)}x`)}</tr>`;
 }
 
 export function renderHome(state) {
@@ -112,11 +120,11 @@ export function renderHome(state) {
   <section class="panel"><div class="section-heading"><div><h2>Live games this month</h2>
       <p>Month-to-date from the 1st at 00:00Z. Studio P/L is the studio's ${((state.money?.profitShare ?? 0.1) * 100).toFixed(0)}% share of gross gaming revenue.</p></div>
       <span class="tag">${rows.length} games</span></div>
-    <div class="scroll"><table><thead><tr><th>Game</th><th>Bets</th><th>Turnover</th><th>Studio P/L</th><th>P/L today</th><th>Online now</th></tr></thead>
+    <div class="scroll"><table data-sortable="live-games"><thead><tr><th data-sort="text">Game</th><th data-sort="number">Bets</th><th data-sort="number">Turnover</th><th data-sort="number">Studio P/L</th><th data-sort="number">P/L today</th><th data-sort="number">Online now</th></tr></thead>
       <tbody>${rows.length ? rows.map((r) => html`<tr class="${r.pending ? 'pending' : ''}">
         <td><a class="game-link" href="${gameHref(r.name)}">${r.label ?? r.name}</a>${r.pending ? html` <span class="tag">live, nothing yet</span>` : null}</td>
-        <td>${int(r.count)}</td><td>${usd(r.turnoverUsd)}</td><td>${signed(r.profitUsd)}</td>
-        <td>${signed(r.dayProfitUsd)}</td><td>${int(r.online)}</td></tr>`)
+        ${numCell(r.count, int(r.count))}${numCell(r.turnoverUsd, usd(r.turnoverUsd))}${numCell(r.profitUsd, signed(r.profitUsd))}
+        ${numCell(r.dayProfitUsd, signed(r.dayProfitUsd))}${numCell(r.online, int(r.online))}</tr>`)
         : html`<tr><td colspan="6" class="empty">No games on the roster yet.</td></tr>`}</tbody>
       ${rows.length ? html`<tfoot><tr><td>Total</td><td>${int(total.count)}</td><td>${usd(total.turnoverUsd)}</td>
         <td>${signed(total.profitUsd)}</td><td>${signed(total.dayProfitUsd)}</td><td>${int(total.online)}</td></tr></tfoot>` : null}
@@ -125,14 +133,14 @@ export function renderHome(state) {
   <section class="panel"><div class="section-heading"><div><h2>Games</h2>
       <p>Every title in the studio's catalogue, live or not, with the rating the Engine studio shows for it and the revenue model the roster reports: the 10% revenue share, or the 5% GGR split across providers. Open a game for its bet modes, math and players, or open it on Engine.</p></div>
       <span class="tag">${catalogue.length} titles</span></div>
-    ${catalogue.length ? html`<div class="scroll"><table><thead><tr><th>Game</th><th>Rating</th><th>Status</th><th>Revenue model</th><th>Approval stage</th><th>Engine</th></tr></thead>
+    ${catalogue.length ? html`<div class="scroll"><table data-sortable="catalogue"><thead><tr><th data-sort="text">Game</th><th data-sort="number">Rating</th><th data-sort="text">Status</th><th data-sort="text">Revenue model</th><th data-sort="text">Approval stage</th><th>Engine</th></tr></thead>
       <tbody>${catalogue.map((t) => catalogueRow(t, team, rateBySlug.get(t.slug) ?? null))}</tbody></table></div>`
       : html`<p class="dim">No titles in the catalogue yet.</p>`}</section>
 
   <section class="panel"><div class="section-heading"><div><h2>Not yet live</h2>
       <p>In the catalogue but not turned on. The API reports no play for these; math is what was captured before release.</p></div>
       <span class="tag">${waiting.length} titles</span></div>
-    ${waiting.length ? html`<div class="scroll"><table><thead><tr><th>Game</th><th>Status</th><th>Approval stage</th><th>Captured RTP</th><th>Modes</th><th>Max win</th></tr></thead>
+    ${waiting.length ? html`<div class="scroll"><table data-sortable="waiting"><thead><tr><th data-sort="text">Game</th><th data-sort="text">Status</th><th data-sort="text">Approval stage</th><th data-sort="number">Captured RTP</th><th data-sort="number">Modes</th><th data-sort="number">Max win</th></tr></thead>
       <tbody>${waiting.map((t) => waitingRow(t, state.math?.[t.slug]))}</tbody></table></div>`
       : html`<p class="dim">No titles waiting to go live.</p>`}</section>`;
 

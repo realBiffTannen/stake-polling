@@ -15,6 +15,13 @@ export const INSIGHTS_CSS = `
 .chart{width:100%;height:auto;display:block}
 .chart .gridline{stroke:#263043;stroke-width:1}
 .chart .axis-label{fill:var(--dim);font-size:10px}
+.chart .zero-line{stroke:#8d9bb0;stroke-width:1.5}
+.js table[data-sortable] th[data-sort]{cursor:pointer;user-select:none;-webkit-user-select:none}
+.js table[data-sortable] th[data-sort]:hover,.js table[data-sortable] th[data-sort]:focus-visible{color:var(--text)}
+.js table[data-sortable] th[data-sort]::after{display:inline-block;margin-left:.35em;font-size:8px;color:var(--dim)}
+.js table[data-sortable] th[data-sort]:hover::after{content:"\\2195"}
+.js table[data-sortable] th[data-sort][aria-sort=ascending]::after{content:"\\25B2";color:var(--mint)}
+.js table[data-sortable] th[data-sort][aria-sort=descending]::after{content:"\\25BC";color:var(--mint)}
 .chart .series{stroke-linejoin:round;stroke-linecap:round}
 .game-legend{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 14px}
 .game-legend a{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #2b3547;border-radius:999px;color:var(--dim);font-size:12px;line-height:1.2;text-decoration:none}
@@ -687,7 +694,75 @@ export const INSIGHTS_JS = `
     $$('dialog.dialog[open]').forEach((d) => { if (typeof d.showModal === 'function') { d.close(); d.showModal(); } });
   }
 
-  function enhance() { syncPollBar(); watchSections(); }
+  // Sortable tables. A view marks a table data-sortable; each heading that
+  // sorts says how (data-sort="number" or "text"), and a numeric cell carries
+  // its raw value in data-value. Click a heading to sort by it, again to
+  // reverse: numbers start biggest first, text A to Z, and a figure nobody
+  // measured (no data-value) sorts last either way. The choice is kept per
+  // table in sessionStorage, so it survives the fragment refresh replacing
+  // <main> on every poll. The Total row lives in <tfoot> and never moves.
+  const SORT_STORE = 'stake:table-sort';
+  function sortPrefs() { try { return JSON.parse(sessionStorage.getItem(SORT_STORE) || '{}') || {}; } catch { return {}; } }
+  function rememberSort(id, pref) { try { const all = sortPrefs(); all[id] = pref; sessionStorage.setItem(SORT_STORE, JSON.stringify(all)); } catch {} }
+  function sortKey(td, kind) {
+    if (!td) return null;
+    if (kind === 'number') { const v = td.dataset ? td.dataset.value : undefined; return v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v); }
+    return String(td.textContent || '').trim().toLowerCase();
+  }
+  function applySort(table, col, dir) {
+    const ths = [...table.querySelectorAll('thead th')];
+    const th = ths[col];
+    const body = table.tBodies && table.tBodies[0];
+    if (!th || !th.dataset.sort || !body) return;
+    const kind = th.dataset.sort;
+    // Full rows only: a one-cell "nothing here" row spanning the table stays put.
+    const rows = [...body.rows].filter((r) => r.cells.length === ths.length);
+    const keyed = rows.map((r, i) => ({ r, i, k: sortKey(r.cells[col], kind) }));
+    const sign = dir === 'desc' ? -1 : 1;
+    keyed.sort((a, b) => {
+      const an = a.k === null || a.k === '', bn = b.k === null || b.k === '';
+      if (an || bn) return an && bn ? a.i - b.i : an ? 1 : -1;
+      const c = kind === 'number' ? a.k - b.k : (a.k < b.k ? -1 : a.k > b.k ? 1 : 0);
+      return sign * c || a.i - b.i;
+    });
+    keyed.forEach(({ r }) => body.appendChild(r));
+    ths.forEach((h, i) => { if (h.dataset.sort) h.setAttribute('aria-sort', i === col ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'); });
+  }
+  function toggleSort(th) {
+    const table = th.closest('table');
+    if (!table || !table.dataset || !table.dataset.sortable) return;
+    const col = [...th.parentElement.children].indexOf(th);
+    const now = th.getAttribute('aria-sort');
+    const dir = now === 'ascending' ? 'desc' : now === 'descending' ? 'asc' : (th.dataset.sort === 'number' ? 'desc' : 'asc');
+    applySort(table, col, dir);
+    rememberSort(table.dataset.sortable, { col, dir });
+  }
+  function enhanceTables() {
+    const prefs = sortPrefs();
+    $$('table[data-sortable]').forEach((table) => {
+      [...table.querySelectorAll('thead th[data-sort]')].forEach((th) => {
+        th.tabIndex = 0;
+        th.setAttribute('role', 'button');
+        if (!th.hasAttribute('aria-sort')) th.setAttribute('aria-sort', 'none');
+        th.setAttribute('title', 'Sort by this column');
+      });
+      const pref = prefs[table.dataset.sortable];
+      if (pref && Number.isInteger(pref.col)) applySort(table, pref.col, pref.dir === 'desc' ? 'desc' : 'asc');
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const th = e.target && e.target.closest ? e.target.closest('table[data-sortable] thead th[data-sort]') : null;
+    if (th) toggleSort(th);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const th = e.target && e.target.closest ? e.target.closest('table[data-sortable] thead th[data-sort]') : null;
+    if (!th) return;
+    e.preventDefault();
+    toggleSort(th);
+  });
+
+  function enhance() { syncPollBar(); watchSections(); enhanceTables(); }
   document.addEventListener('stake:refreshed', () => { setDrawer(false); enhance(); });
   enhance();
   settleToasts();
