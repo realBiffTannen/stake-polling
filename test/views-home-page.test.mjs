@@ -8,14 +8,16 @@ const galaxy = { name: 'pixel-geyser', label: 'Pixel Geyser', count: 50, turnove
 // Live in the catalogue, nothing on the roster yet - every figure unmeasured.
 const pending = { name: 'pixel-nest', label: 'Pixel Nest', pending: true, count: null, turnoverUsd: null, profitUsd: null, dayProfitUsd: null, online: 1 };
 const titles = [
-  { slug: 'berry', name: 'Berry', isLive: true, published: true, approval: 'responded' },
-  { slug: 'metro-night-run', name: 'Metro Night Run', isLive: false, published: true, approval: 'new' },
-  { slug: 'baseline', name: 'Base Line', isLive: false, published: false, approval: null },
+  { slug: 'berry', name: 'Berry', isLive: true, published: true, approval: 'responded', rating: 60 },
+  { slug: 'metro-night-run', name: 'Metro Night Run', isLive: false, published: true, approval: 'new', rating: 30 },
+  { slug: 'baseline', name: 'Base Line', isLive: false, published: false, approval: null, rating: null },
 ];
 const math = { 'metro-night-run': { edge: 0.045, maxWin: 50000, version: 6, modes: { BASE: {}, ANTE: {}, VIPER_VAULT: {} } } };
 const base = { meta: { team: 'acme-studios' }, stale: false, ageMs: 0, now: Date.parse('2026-09-22T12:00:00Z'), money, math, titles };
 const render = (over = {}) => String(renderHome({ ...base, rows: [berry, galaxy, pending], ...over }));
 const section = (out, heading) => out.slice(out.indexOf(heading));
+const between = (out, from, to) => { const a = out.indexOf(from); return out.slice(a, out.indexOf(to, a)); };
+const games = (out) => between(out, '<h2>Games</h2>', '<h2>Not yet live</h2>');
 
 test('every game on the roster links to its own game page', () => {
   const out = render();
@@ -85,4 +87,54 @@ test('untrusted game names from the API cannot inject markup', () => {
   assert.doesNotMatch(out, /<img src=x/);
   assert.doesNotMatch(out, /<script>x/);
   assert.doesNotMatch(out, /<i onmouseover/);
+});
+
+// ------------------------------------------------------------ Games section
+test('the Games section lists every catalogue title, live first, with a link to its own page', () => {
+  const out = games(render());
+  assert.match(out, /3 titles/);
+  for (const slug of ['berry', 'metro-night-run', 'baseline']) assert.match(out, new RegExp(`href="/game/${slug}"`), slug);
+  assert.ok(out.indexOf('Berry') < out.indexOf('Base Line'), 'live before dark');
+  assert.ok(out.indexOf('Base Line') < out.indexOf('Metro Night Run'), 'then by name');
+});
+
+test('each title shows the studio dashboard star rating out of three, or Unrated', () => {
+  const out = games(render());
+  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.match(row('Berry'), /aria-label="2 of 3 stars"/);
+  assert.match(row('Metro Night Run'), /aria-label="1 of 3 stars"/);
+  assert.match(row('Base Line'), /Unrated/);
+  assert.doesNotMatch(row('Base Line'), /stars"/, 'no stars invented for an unrated title');
+});
+
+test('each title says whether it is live, and its approval stage', () => {
+  const out = games(render());
+  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.match(row('Berry'), />Live</);
+  assert.match(row('Berry'), />responded</);
+  assert.match(row('Metro Night Run'), />Not live</);
+  assert.match(row('Base Line'), />Unpublished</);
+});
+
+test('each title links to its page on the Engine studio, in a new tab, and the link goes when no team is known', () => {
+  const out = games(render());
+  assert.match(out, /<a class="engine-link" href="https:\/\/studio\.engine\.io\/teams\/acme-studios\/games\/berry" target="_blank" rel="noopener noreferrer">/);
+  assert.match(out, /studio\.engine\.io\/teams\/acme-studios\/games\/metro-night-run"/);
+  assert.doesNotMatch(games(render({ meta: {} })), /studio\.engine\.io/);
+});
+
+test('the Engine link encodes a hostile slug and team rather than trusting them', () => {
+  const out = games(render({ meta: { team: 'a"b' }, titles: [{ slug: 'x/y?z', name: 'X', isLive: true, rating: 60 }] }));
+  assert.doesNotMatch(out, /teams\/a"b/);
+  assert.match(out, /teams\/a%22b\/games\/x%2Fy%3Fz/);
+});
+
+test('the money table is titled as the live games this month, so the two tables cannot be confused', () => {
+  const out = render();
+  assert.match(out, /<h2>Live games this month<\/h2>/);
+  assert.equal((out.match(/<h2>Games<\/h2>/g) ?? []).length, 1);
+});
+
+test('a missing catalogue still renders the Games section, empty', () => {
+  assert.match(games(render({ titles: undefined })), /No titles in the catalogue/);
 });

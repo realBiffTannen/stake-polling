@@ -7,6 +7,7 @@
 import { html } from '../html.mjs';
 import { assetUrl } from '../static.mjs';
 import { ICONS } from './icons.mjs';
+import { DISCLAIMER } from '../disclaimer.mjs';
 
 const ERRORS = {
   invalid: 'That username and password do not match.',
@@ -30,5 +31,6 @@ export function renderLogin({ error = null, next = '/', csrf, username = '' }) {
       ${message ? html`<p class="field-error" role="alert">${message}</p>` : null}
       <button class="button block" type="submit">Sign in</button>
       <p class="auth-note">Forgot the password? On the machine running the dashboard: <code>npm run auth -- disable</code></p>
-    </form></div>`;
+    </form>
+    <p class="disclaimer auth-disclaimer"><b>Disclaimer.</b> ${DISCLAIMER}</p></div>`;
 }

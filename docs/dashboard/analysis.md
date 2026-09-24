@@ -117,6 +117,10 @@ They do not follow any one person.
 
 ## Unusual days and the tape
 
+Both panels start folded: the heading and its conclusion sentence show, and
+the arrow on the right opens the list. A panel you open stays open through the
+live refresh.
+
 - **Unusual days.** A day at three times the median of that game's previous 14
   active days, with at least five days to compare and a floor of $400 and 900
   rounds. Launch days and today are excluded.

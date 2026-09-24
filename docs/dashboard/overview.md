@@ -2,7 +2,7 @@
 title: Overview
 parent: The web dashboard
 nav_order: 1
-description: "The landing page: one line per game, month to date, and the titles not yet live."
+description: "The landing page: one line per live game, month to date, every title in the catalogue with its Engine star rating, and the titles not yet live."
 ---
 
 # Overview
@@ -22,7 +22,7 @@ players are.
 | Turnover this month | In US dollars |
 | Online now | Players online across live games |
 
-## Games
+## Live games this month
 
 One row per roster game, sorted by turnover, with a total row:
 
@@ -37,6 +37,19 @@ One row per roster game, sorted by turnover, with a total row:
 
 Month to date runs from the 1st at 00:00Z. A game that is live but has no
 figures yet shows dashes and the tag **live, nothing yet**, rather than `$0.00`.
+
+## Games
+
+Every title in the studio's catalogue, live or not, live titles first and then
+by name:
+
+| Column | Meaning |
+|---|---|
+| Game | Opens its game page |
+| Rating | The star rating the Engine studio shows for the title, out of three (the catalogue's `rating` over 30, rounded, as the studio's own games list draws it), or **Unrated** |
+| Status | **Live**, **Not live** or **Unpublished** |
+| Approval stage | As the catalogue reports it |
+| Engine | Opens the title's page on the Engine studio (`studio.engine.io/teams/<team>/games/<slug>`) in a new tab |
 
 ## Not yet live
 

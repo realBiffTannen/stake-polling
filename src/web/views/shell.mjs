@@ -4,6 +4,7 @@ import { banner } from './parts.mjs';
 import { fill } from '../fills.mjs';
 import { assetUrl } from '../static.mjs';
 import { VERSION } from '../../version.mjs';
+import { DISCLAIMER } from '../disclaimer.mjs';
 import { ICONS } from './icons.mjs';
 import { msToNextBoundary, periodMs } from '../../poll/schedule.mjs';
 
@@ -95,7 +96,8 @@ export function shell({ state, body, active = 'insights', title = 'Player insigh
     </dialog>
     ${banner(state)}
     <div class="content">${body}</div>
-    <footer>STUDIO ANALYTICS <span>Observed data. Clear definitions. <b class="version">v${VERSION}</b></span></footer>
+    <footer><div class="footer-row">STUDIO ANALYTICS <span>Observed data. Clear definitions. <b class="version">v${VERSION}</b></span></div>
+      <p class="disclaimer"><b>Disclaimer.</b> ${DISCLAIMER}</p></footer>
   </div>`;
 }
 

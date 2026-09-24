@@ -72,9 +72,10 @@ large win**. These are hypotheses, and the wording says so. See
 One line every five minutes (`intervals.summary`) recording what the roster
 did: bets, turnover, profit, how many games were active, the biggest mover, and
 what fired. The poller writes it to the `summary` stream, which keeps a week, so
-"what happened while I was away" is already written down.
+"what happened while I was away" is already written down. The five newest
+intervals are shown; **Show N more** unfolds the rest, newest first.
 
 ## Findings
 
-The raw alerts, newest first. See
-[Anomaly detection and alerts](../anomalies.md).
+The raw alerts, newest first: the five newest shown, the rest behind **Show N
+more**. See [Anomaly detection and alerts](../anomalies.md).

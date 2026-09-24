@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Games table on the Overview:** every title in the catalogue, live or not, with the star rating the Engine studio shows for it (out of three; the catalogue's `rating` over 30, rounded, as the studio's own games list draws it, or *Unrated*), whether it is live, its approval stage, a link to its game page and a link to its page on the Engine studio. The money table is now titled *Live games this month*.
+
+### Changed
+- **Analysis:** *Unusual days* and *The tape* start folded; the heading and its conclusion stay in view and an arrow opens the list. An opened fold stays open through the live refresh.
+- **Live operations:** *running action* and *findings* show the five newest entries, with the rest behind *Show N more*.
+
 ## 1.0.2 - 2026-09-23
 
 ### Added
@@ -24,6 +33,7 @@
 - **Interface:** a command palette (Cmd/Ctrl+K or /), breadcrumbs, a mobile navigation drawer, a poll progress bar, an "On this page" scrollspy on Analysis, accordions, a timeline tape, an overflow menu, a table filter and modal dialogs.
 - **Demo site:** a static copy of the dashboard running on made-up data for twenty fictional games (`npm run demo:build`, `npm run demo:deploy`), hosted at http://stake-polling-demo.s3-website-us-east-1.amazonaws.com/
 - **Documentation site** on GitHub Pages, plus `SECURITY.md` and `CONTRIBUTING.md`.
+- **Disclaimer** in the footer of every page and on the sign-in page: independent software, not affiliated with Engine, provided as is, not financial advice, no liability. It is repeated word for word in the README and on the docs site.
 
 ### Changed
 - Dismissed warnings are kept on the server for everyone, not in one browser.

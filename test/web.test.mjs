@@ -560,3 +560,36 @@ test('countdownLabel is m:ss and a dash for no reading', () => {
   assert.equal(countdownLabel(null), DASH);
   assert.equal(countdownLabel('nonsense'), DASH);
 });
+
+// --- Only the newest five, the rest behind a fold ---------------------------
+const interval = (i) => ({
+  from: Date.UTC(2026, 8, 16, 14, 5 * i, 0), to: Date.UTC(2026, 8, 16, 14, 5 * (i + 1), 0), minutes: 5,
+  turnover: 1_000_000_000, profit: 0, count: 100 + i, activeGames: 3, topMover: `mover${i}`, topMoverTurnover: 500_000_000, alerts: 0, crits: 0, warns: 0,
+});
+const finding = (i) => ({ ts: Date.UTC(2026, 8, 16, 14, i, 0), severity: 'warn', message: `finding${i}`, game: 'berry' });
+// The reader hands both lists newest first (xRevRange), and the views keep that order.
+const newestFirst = (make, n) => Array.from({ length: n }, (_, i) => make(n - 1 - i));
+
+test('the action log shows the five newest intervals and folds the older ones behind "more"', () => {
+  const out = String(actionLog(newestFirst(interval, 8), DEFAULT_MONEY));
+  const fold = out.indexOf('<details class="fold-more" id="running-action-more">');
+  assert.ok(fold > 0, out);
+  for (const i of [7, 6, 5, 4, 3]) assert.ok(out.indexOf(`mover${i}`) < fold, `mover${i} is shown`);
+  for (const i of [2, 1, 0]) assert.ok(out.indexOf(`mover${i}`) > fold, `mover${i} is folded`);
+  assert.match(out, /Show 3 more/);
+  assert.doesNotMatch(out, /<details class="fold-more"[^>]*\sopen/, 'starts closed');
+});
+
+test('findings likewise: the five newest shown, the rest folded, still newest first inside the fold', () => {
+  const out = String(findingsList(newestFirst(finding, 7)));
+  const fold = out.indexOf('<details class="fold-more" id="findings-more">');
+  assert.ok(fold > 0, out);
+  for (const i of [6, 5, 4, 3, 2]) assert.ok(out.indexOf(`finding${i}`) < fold, `finding${i} is shown`);
+  assert.ok(fold < out.indexOf('finding1') && out.indexOf('finding1') < out.indexOf('finding0'));
+  assert.match(out, /Show 2 more/);
+});
+
+test('five or fewer entries need no fold at all', () => {
+  assert.doesNotMatch(String(actionLog(newestFirst(interval, 5), DEFAULT_MONEY)), /fold-more/);
+  assert.doesNotMatch(String(findingsList(newestFirst(finding, 1))), /fold-more/);
+});

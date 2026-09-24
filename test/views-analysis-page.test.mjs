@@ -122,3 +122,14 @@ test('players: counts in the span, their link to turnover, and each game\'s cont
   assert.match(out, /id="p-players-and-turnover"/, 'in the On this page list');
   assert.doesNotMatch(out, /NaN|undefined/);
 });
+
+test('unusual days and the tape are folded shut until opened, and stay in the On this page list', () => {
+  const out = render('month');
+  for (const id of ['p-unusual-days', 'p-the-tape']) {
+    assert.match(out, new RegExp(`<section class="panel chart-panel" id="${id}"><details class="fold" id="${id}-fold"><summary>`), id);
+    assert.doesNotMatch(out, new RegExp(`id="${id}-fold" open`), `${id} starts closed`);
+    assert.match(out, new RegExp(`<a href="#${id}">`), `${id} in On this page`);
+  }
+  assert.match(out, /<section class="panel chart-panel" id="p-quiet-share"><div class="section-heading">/, 'other panels are not folded');
+  assert.equal((out.match(/class="fold"/g) ?? []).length, 2);
+});

@@ -211,12 +211,12 @@ export function renderAnalysis({ state, model, span = 'month' }) {
 
   ${panel('Unusual days', unusual.headline, unusual.rows.length ? h`<ul class="list">${unusual.rows.map((u) => h`<li>
       <div><b>${u.name ?? u.slug}</b> on ${u.date}: ${u.kind === 'both' ? 'stakes and players' : u.kind} at ${Number(u.ratio).toFixed(1)}x its median${blank(u.turnover) ? '' : ` (${usd(u.turnover)} turnover)`}</div></li>`)}</ul>` : null,
-    'A day at three times the median of that game\'s previous 14 active days, with at least five days to compare, $400 and 900 rounds of floor. Launch days and today are excluded.')}
+    'A day at three times the median of that game\'s previous 14 active days, with at least five days to compare, $400 and 900 rounds of floor. Launch days and today are excluded.', { collapsed: true })}
 
   ${panel('The tape', tapeHeadline(events), events.length ? h`<ul class="list timeline">${events.slice(0, 40).map((e) => h`<li class="${e.kind === 'payout_spike' ? 'warn' : ''}">
       <div>${e.message}</div><div class="dim">${new Date(e.ts).toISOString().slice(11, 16)}Z · ${e.label ?? e.slug} · ${e.kind.replace('_', ' ')}</div></li>`)}</ul>
       ${events.length > 40 ? h`<p class="dim">${int(events.length - 40)} more - every interval is in the poll log.</p>` : null}` : null,
-    'Always the last 24h. Big stake: $500+ in one poll interval at $10+ a spin. Payout spike: a player won $250+ net and 5x+ the stake. House take: the house kept $250+. Exact stake: one feature buy alone in an interval, so its price is exact.')}
+    'Always the last 24h. Big stake: $500+ in one poll interval at $10+ a spin. Payout spike: a player won $250+ net and 5x+ the stake. House take: the house kept $250+. Exact stake: one feature buy alone in an interval, so its price is exact.', { collapsed: true })}
 
   ${panel('Running studio P/L, hour by hour', trend.headline, lineChart({ labels: hourLabels, tipLabels: hourTips,
       series: [{ name: 'running studio P/L', colour: '#4a8ff5', values: trend.cumulative }], format: formatUsdSigned, title: `${hourWords}: running studio P/L` }),
@@ -243,7 +243,8 @@ export function renderAnalysis({ state, model, span = 'month' }) {
     </div></section>`;
 
   // "On this page", built from the panels as rendered, so it cannot drift from them.
-  const sections = [...String(panels).matchAll(/<section class="panel[^"]*" id="([^"]+)"><div class="section-heading">(?:<div>)?<h2>([^<]+)<\/h2>/g)];
+  // A folded panel (chartPanel's `collapsed`) opens with its <details> where the others open with their heading div.
+  const sections = [...String(panels).matchAll(/<section class="panel[^"]*" id="([^"]+)">(?:<details class="fold" id="[^"]+"><summary>|<div class="section-heading">(?:<div>)?)<h2>([^<]+)<\/h2>/g)];
   const toc = html`<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ol>${sections.map(([, id, title]) => html`<li><a href="#${id}">${raw(title)}</a></li>`)}</ol></nav>`;
   const body = html`${head}<div class="with-toc"><div class="toc-main">${panels}</div>${toc}</div>`;
 
