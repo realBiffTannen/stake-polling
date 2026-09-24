@@ -36,11 +36,14 @@ export function timeLine({ points = [], title = '', format = String, colour = '#
   }
   if (run.length) runs.push(run);
 
-  // Axis labels on whole hours, spaced to about eight across.
-  const spanH = (t1 - t0) / 3_600_000;
-  const stepH = [1, 2, 3, 6, 12, 24, 48].find((h) => spanH / h <= 8) ?? 48;
+  // Axis labels on round clock times, spaced to about eight across: every
+  // ten minutes for an hour or less, up to every two days for a week. In
+  // minutes, so a step is an exact number of milliseconds.
+  const spanMin = (t1 - t0) / 60_000;
+  const stepMin = [10, 15, 30, 60, 120, 180, 360, 720, 1440, 2880].find((m) => spanMin / m <= 8) ?? 2880;
+  const stepMs = stepMin * 60_000;
   const ticks = [];
-  for (let t = Math.ceil(t0 / (stepH * 3_600_000)) * stepH * 3_600_000; t <= t1; t += stepH * 3_600_000) ticks.push(t);
+  for (let t = Math.ceil(t0 / stepMs) * stepMs; t <= t1; t += stepMs) ticks.push(t);
 
   const per = Math.max(1, Math.ceil(points.length / maxHits));
   const bands = [];
@@ -55,7 +58,7 @@ export function timeLine({ points = [], title = '', format = String, colour = '#
   return html`<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}"><title>${title}</title>
     ${axis.ticks.map((t) => html`<g><line class="gridline" x1="${pad.left}" x2="${pad.left + plotW}" y1="${ys(t)}" y2="${ys(t)}"/>
       <text class="axis-label" x="${pad.left - 8}" y="${ys(t) + 4}" text-anchor="end">${format(t)}</text></g>`)}
-    ${ticks.map((t) => html`<text class="axis-label" x="${xs(t)}" y="${height - 10}" text-anchor="middle">${stepH >= 24 ? md(t) : hm(t)}</text>`)}
+    ${ticks.map((t) => html`<text class="axis-label" x="${xs(t)}" y="${height - 10}" text-anchor="middle">${stepMin >= 1440 ? md(t) : hm(t)}</text>`)}
     ${runs.map((r) => html`<path class="series" fill="none" stroke="${colour}" stroke-width="2" d="${raw(r.length === 1 ? `M${r[0]} L${r[0]}` : `M${r.join(' L')}`)}"/>`)}
     ${bands.map((b) => {
       const tip = JSON.stringify({ label: per === 1 ? hm(b.from) : `${hm(b.from)} - ${hm(b.to)}`,

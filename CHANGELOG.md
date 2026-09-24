@@ -6,6 +6,7 @@
 - **Games page** (`/games`, second in the sidebar): the catalogue and the not-yet-live tables on a page of their own, drawn by the same code as the Overview's. The catalogue shows each title's **lifetime bets, players, turnover and studio P/L** (from the hourly lifetime snapshot, dashes where it has none), says **Live** in the approval column once a title is live (the Status column is gone), and every row opens (▸) into its details: this month's figures, the catalogue facts, the captured math, its bet modes and the links.
 - **Sortable tables:** every table on the Overview and the Games page sorts by any column on a click of its heading - numbers biggest first, text A to Z, again to reverse. A figure nobody measured sorts last, the Total row stays put, and the choice survives the live refresh.
 - **Zero line** on the hour-by-hour studio P/L chart (and any line chart whose values cross zero), so which side of nothing the day is on reads at a glance.
+- **Players-online ranges:** *30m*, *1h* and *3h* join *6h / 24h / 3d / 7d* on Trends and on every game page, shortest first. The time axis now labels short ranges by the minute (every ten minutes for an hour or less) instead of on whole hours only.
 
 ## 1.1.0 - 2026-09-23
 

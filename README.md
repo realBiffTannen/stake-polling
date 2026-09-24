@@ -1114,7 +1114,7 @@ The pages, in sidebar order:
 | `/settlement` | **Settlement.** Position, what Stake would settle if the month ended now (10% of summed roster profit plus carry - Stake settles on this, not on `position`), the luck gap, the month-end projection, today against the same hours of yesterday, and whether `/stats`, `/games` and the per-mode response reconcile to the cent, with endpoint freshness. |
 | `/insights` | **Player insights** (was `/`; old `/?game=…` links redirect here). Daily players, new-to-game, returning, filters, and the daily breakdown as CSV or PDF (`/export.csv`, `/export.pdf`, same filters). |
 | `/live` | The collector's roster, possible events, running action and findings (the five newest of each, the rest behind *Show more*). |
-| `/trends` | Players online every poll, 30 days of bets, turnover, P/L, players, average bet and RTP, turnover by game (the legend lists every game; pick one to chart it on its own scale), and returning players against releases. |
+| `/trends` | Players online every poll (the last 30 minutes to the last 7 days), 30 days of bets, turnover, P/L, players, average bet and RTP, turnover by game (the legend lists every game; pick one to chart it on its own scale), and returning players against releases. |
 | `/math` | The captured math corpus (your `math.json`). |
 | `/log` | **Poll log.** Every entry the poller wrote, newest first, 100 a page, filterable by stream, exactly as stored - plus raw CSV downloads. |
 | `/settings` | **Settings.** Security (sign-in), System (Redis memory as a level meter, persistence, poll interval, archive, and showing dismissed warnings again) and About. |
