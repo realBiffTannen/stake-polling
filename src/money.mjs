@@ -63,3 +63,21 @@ export function formatUsdSigned(dollars, opts) {
   const n = Number(dollars);
   return n > 0 ? `+${formatUsd(n, opts)}` : formatUsd(n, opts);
 }
+
+/**
+ * The revenue model a roster game is on, from the `stats.rate` the roster
+ * reports for it in basis points: 1000 is the 10% revenue share, 500 the 5%
+ * GGR split across several providers. The studio dashboard's own export
+ * prints `rate / 100` with a percent sign, and the `revenueShare` beside it
+ * is `rate / 10000` of the gross profit. Null when there is no rate - a title
+ * not on the roster has none, and that is not the same claim as 0%.
+ */
+export function revenueModel(rateBp) {
+  if (rateBp === null || rateBp === undefined || rateBp === '') return null;
+  const bp = Number(rateBp);
+  if (!Number.isFinite(bp)) return null;
+  const percent = bp / 100;
+  if (bp === 1000) return { rateBp: bp, percent, split: false, label: '10% revenue share' };
+  if (bp === 500) return { rateBp: bp, percent, split: true, label: '5% GGR, split across providers' };
+  return { rateBp: bp, percent, split: null, label: `${Number(percent.toFixed(2))}% GGR` };
+}

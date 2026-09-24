@@ -107,3 +107,13 @@ test('timeLine draws 576 slots as one line with a bounded number of hover bands'
 test('timeLine with nothing measured says so', () => {
   assert.match(s(timeLine({ points: [{ ts: 0, value: null }], title: 't', format: String })), /Nothing measured/);
 });
+
+test('a sub-hour time line labels its axis every ten minutes, three hours every half hour, six hours every hour', () => {
+  const t0 = Date.parse('2026-09-21T12:00:00Z');
+  const line = (minutes) => s(timeLine({ points: Array.from({ length: minutes / 2.5 + 1 }, (_, i) => ({ ts: t0 + i * 150_000, value: 5 + (i % 4) })), title: 'p', format: String }));
+  const labels = (out) => [...out.matchAll(/text-anchor="middle">([0-9:]+Z)</g)].map((m) => m[1]);
+  assert.deepEqual(labels(line(30)), ['12:00Z', '12:10Z', '12:20Z', '12:30Z']);
+  assert.deepEqual(labels(line(60)), ['12:00Z', '12:10Z', '12:20Z', '12:30Z', '12:40Z', '12:50Z', '13:00Z']);
+  assert.deepEqual(labels(line(180)), ['12:00Z', '12:30Z', '13:00Z', '13:30Z', '14:00Z', '14:30Z', '15:00Z']);
+  assert.deepEqual(labels(line(360)), ['12:00Z', '13:00Z', '14:00Z', '15:00Z', '16:00Z', '17:00Z', '18:00Z']);
+});

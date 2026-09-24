@@ -1,7 +1,7 @@
 ---
 title: Settings
 parent: The web dashboard
-nav_order: 10
+nav_order: 11
 description: "Sign-in, system status (Redis memory, persistence, poll interval, archive, dismissed warnings) and the version."
 ---
 

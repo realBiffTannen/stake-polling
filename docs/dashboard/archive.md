@@ -1,7 +1,7 @@
 ---
 title: Archive
 parent: The web dashboard
-nav_order: 9
+nav_order: 10
 description: "The nightly archive's stored days, their download links, and the archiver's last run."
 ---
 

@@ -177,3 +177,13 @@ export function chartPanel(title, headline, chart, note = null, { collapsed = fa
   return html`<section class="panel chart-panel" id="${id}"><details class="fold" id="${id}-fold"><summary><h2>${title}</h2><span class="conclusion">${headline ?? NOTHING_MEASURED}</span><span class="fold-arrow" aria-hidden="true"></span></summary>
       <div class="fold-body">${chart}${foot}</div></details></section>`;
 }
+
+/**
+ * A table figure with its raw value for sorting (app.js reads data-value on
+ * a table a view marks data-sortable). An unmeasured figure - null, or not a
+ * finite number - carries none, so it sorts last rather than as a zero.
+ */
+export function numCell(value, rendered) {
+  const n = value === null || value === undefined || value === '' ? NaN : Number(value);
+  return Number.isFinite(n) ? html`<td data-value="${n}">${rendered}</td>` : html`<td>${rendered}</td>`;
+}

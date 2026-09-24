@@ -107,13 +107,17 @@ test('each title shows the studio dashboard star rating out of three, or Unrated
   assert.doesNotMatch(row('Base Line'), /stars"/, 'no stars invented for an unrated title');
 });
 
-test('each title says whether it is live, and its approval stage', () => {
+test('a live title shows Live where its approval stage goes; a dark one shows its stage, and its status in the details', () => {
   const out = games(render());
   const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
-  assert.match(row('Berry'), />Live</);
-  assert.match(row('Berry'), />responded</);
-  assert.match(row('Metro Night Run'), />Not live</);
-  assert.match(row('Base Line'), />Unpublished</);
+  const details = (slug) => { const a = out.indexOf(`data-details-for="${slug}"`); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.doesNotMatch(out, /<th[^>]*>Status<\/th>/, 'no Status column');
+  assert.match(row('Berry'), /<span class="pill live">Live<\/span>/);
+  assert.doesNotMatch(row('Berry'), />responded</);
+  assert.match(details('berry'), />responded</);
+  assert.match(row('Metro Night Run'), /<td>new<\/td>/);
+  assert.match(details('metro-night-run'), />Published · not live</);
+  assert.match(details('baseline'), />Unpublished</);
 });
 
 test('each title links to its page on the Engine studio, in a new tab, and the link goes when no team is known', () => {
@@ -137,4 +141,58 @@ test('the money table is titled as the live games this month, so the two tables 
 
 test('a missing catalogue still renders the Games section, empty', () => {
   assert.match(games(render({ titles: undefined })), /No titles in the catalogue/);
+});
+
+test('the Games section names each roster game\'s revenue model from its rate, and a dash for a title with none', () => {
+  const geyser = { slug: 'pixel-geyser', name: 'Pixel Geyser', isLive: true, published: true, approval: 'responded', rating: 60 };
+  const out = games(render({ rows: [{ ...berry, rate: 1000 }, { ...galaxy, rate: 500 }, pending], titles: [...titles, geyser] }));
+  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.match(row('Berry'), /<span class="model">10% revenue share<\/span>/);
+  assert.match(row('Pixel Geyser'), /<span class="model split">5% GGR, split across providers<\/span>/);
+  assert.doesNotMatch(row('Metro Night Run'), /%/, 'not on the roster: no rate to report');
+  assert.match(row('Metro Night Run'), /reports a revenue rate only for a game on the roster/);
+  assert.match(out, /<th data-sort="text">Revenue model<\/th>/);
+});
+
+test('a roster row without a rate shows a dash, never 0%', () => {
+  const out = games(render({ rows: [{ ...berry, rate: null }, { ...galaxy }] }));
+  const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.doesNotMatch(row('Berry'), /GGR|revenue share/);
+  assert.match(row('Berry'), /reports a revenue rate only for a game on the roster/);
+});
+
+const live = (out) => between(out, '<h2>Live games this month</h2>', '<h2>Games</h2>');
+
+test('the live games table is sortable: each heading says how it sorts and each figure carries its raw value', () => {
+  const out = live(render());
+  assert.match(out, /<table data-sortable="live-games">/);
+  assert.match(out, /<th data-sort="text">Game<\/th>/);
+  for (const col of ['Bets', 'Turnover', 'Studio P/L', 'P/L today', 'Online now']) assert.ok(out.includes(`<th data-sort="number">${col}</th>`), col);
+  assert.match(out, /<td data-value="500">\$500\.00<\/td>/, 'turnover carries the unformatted number');
+  assert.match(out, /<td data-value="-12.5"><span class="bad">-\$12\.50<\/span><\/td>/, 'a loss carries its sign');
+  assert.match(out, /<td data-value="100">100<\/td>/, 'bets carry the count');
+});
+
+test('an unmeasured figure carries no sort value, so it sorts last rather than as a zero', () => {
+  const row = between(live(render()), 'pixel-nest', '</tr>');
+  assert.doesNotMatch(row, /data-value="(?:|0|null|undefined|NaN)"/);
+  assert.match(row, /<td data-value="1">1<\/td>/, 'the one measured figure (online) still carries its value');
+});
+
+test('the total row stays in the footer, outside what sorting reorders', () => {
+  const out = live(render());
+  assert.match(out, /<tfoot><tr><td>Total<\/td>/);
+  assert.doesNotMatch(between(out, '<tfoot>', '</tfoot>'), /data-value/);
+});
+
+test('the Games and Not-yet-live tables sort too, with the rating and captured math as numbers', () => {
+  const out = render();
+  assert.match(games(out), /<table data-sortable="catalogue">/);
+  assert.match(games(out), /<th data-sort="number">Rating<\/th>/);
+  assert.match(games(out), /<td data-value="60">/, 'the raw rating, not the star count');
+  assert.match(games(out), /<th>Engine<\/th>/, 'a column of identical links does not sort');
+  const waiting = section(out, '<h2>Not yet live</h2>');
+  assert.match(waiting, /<table data-sortable="waiting">/);
+  assert.match(waiting, /<td data-value="50000">50,000x<\/td>/);
+  assert.match(waiting, /<td data-value="3">3<\/td>/);
 });

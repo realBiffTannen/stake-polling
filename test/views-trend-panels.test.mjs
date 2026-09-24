@@ -89,3 +89,20 @@ test('the legend keeps the players-online range, and an unknown game falls back 
   assert.match(panel, /href="\/trends\?online=7d&amp;turnover=game-3#turnover-by-game"/);
   assert.match(panel, /<a href="\/trends\?online=7d#turnover-by-game" class="selected" aria-current="true">/);
 });
+
+test('the players-online picker offers 30m, 1h and 3h before 6h, shortest first, and a short range labels its axis by the minute', () => {
+  assert.deepEqual(Object.keys(ONLINE_RANGES), ['30m', '1h', '3h', '6h', '24h', '3d', '7d']);
+  const out = String(studioTrendPanels({ state, online: '30m' }));
+  assert.match(out, /href="\/trends\?online=30m" class="selected"/);
+  assert.match(out, /One point per 2\.5-minute poll/);
+  assert.match(out, /Peak \d+ online at/);
+  assert.match(out, />11:40Z</);
+  assert.match(out, />11:50Z</);
+  assert.doesNotMatch(out, />10:00Z</, 'nothing older than the range is drawn');
+});
+
+test('a game page offers the same short ranges', () => {
+  const out = String(gameTrendPanels({ slug: 'berry', name: 'Berry', state, span: 'today', online: '1h' }));
+  assert.match(out, /href="\/game\/berry\?span=today&amp;online=1h" class="selected"/);
+  assert.match(out, /online=30m/);
+});

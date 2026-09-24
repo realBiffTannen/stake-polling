@@ -29,8 +29,8 @@ import { PAIR_COLOURS } from '../charts/hbars.mjs';
 import { GAME_COLOURS, OTHER_COLOUR } from '../charts/donut.mjs';
 import { interactiveChart, emptyChart, heatmapData, dailyData } from '../charts/interactive.mjs';
 
-/** The players-online ranges, in hours. 24 hours is the default. */
-export const ONLINE_RANGES = { '6h': 6, '24h': 24, '3d': 72, '7d': 168 };
+/** The players-online ranges, in hours, shortest first. 24 hours is the default. */
+export const ONLINE_RANGES = { '30m': 0.5, '1h': 1, '3h': 3, '6h': 6, '24h': 24, '3d': 72, '7d': 168 };
 const rangeOf = (param) => (Object.hasOwn(ONLINE_RANGES, param ?? '') ? param : '24h');
 
 const compactUsd = (v) => {

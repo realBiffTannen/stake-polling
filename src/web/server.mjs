@@ -10,6 +10,7 @@ import { createPageCache } from './page-cache.mjs';
 import { refill } from './fills.mjs';
 import { renderOverview, countdownHtml } from './views/overview.mjs';
 import { renderHome } from './views/home.mjs';
+import { renderGames } from './views/games.mjs';
 import { renderAnalysis } from './views/analysis.mjs';
 import { renderLog } from './views/log.mjs';
 import { renderSettlement } from './views/settlement.mjs';
@@ -111,7 +112,7 @@ const INSIGHTS_PARAMS = ['game', 'from', 'to', 'days', 'sort', 'dir'];
 
 /** The rendered pages worth caching: every HTML route, never health or exports. */
 function cacheable(pathname) {
-  return ['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate'].includes(pathname) || pathname.startsWith('/game/');
+  return ['/', '/games', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate'].includes(pathname) || pathname.startsWith('/game/');
 }
 
 const COMPRESSIBLE = /^(text\/|application\/json|image\/svg\+xml)/;
@@ -135,7 +136,7 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
     const page = (body, title, state) => ({ status: 200, type: 'text/html; charset=utf-8',
       body: String(url.searchParams.get('fragment') === '1' ? body : documentFor({ body, title, team: state?.meta?.team ?? null })), state });
     const text = (status, message, extra = {}) => ({ status, type: 'text/plain', body: message, headers: extra });
-    if (!['/', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/archive', '/export.csv', '/export.pdf', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
+    if (!['/', '/games', '/insights', '/analysis', '/settlement', '/log', '/live', '/trends', '/math', '/donate', '/archive', '/export.csv', '/export.pdf', '/healthz'].includes(url.pathname) && !url.pathname.startsWith('/game/')) return text(404, 'Page not found');
     if (url.pathname === '/log' && !log) return text(404, 'Page not found');
     if (url.pathname === '/archive' && !archive) return text(404, 'Page not found');
     if (url.pathname === '/' && INSIGHTS_PARAMS.some(p => url.searchParams.has(p))) return text(302, '', { location: `/insights?${url.searchParams}` });
@@ -202,6 +203,7 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
         return page(renderArchive({ state, listing }), 'Archive', state);
       }
       if (url.pathname === '/') return page(renderHome(state), 'Overview', state);
+      if (url.pathname === '/games') return page(renderGames(state), 'Games', state);
       if (url.pathname === '/live') {
         return page(shell({ state, body: html`<div class="page-heading"><div><div class="eyebrow">RIGHT NOW</div><h1>Live operations<span>.</span></h1><p>Current roster, accounting totals and observed activity from the collector.</p></div></div>${renderOverview(state, { sort: url.searchParams.get('sort'), panes: url.searchParams.get('panes') !== '0' })}`, active: 'live', title: 'Live operations' }), 'Live operations', state);
       }

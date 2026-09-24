@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toUsd, toShareUsd, fromUsd, formatUsd, formatUsdSigned, DEFAULT_MONEY } from '../src/money.mjs';
+import { toUsd, toShareUsd, fromUsd, formatUsd, formatUsdSigned, DEFAULT_MONEY, revenueModel } from '../src/money.mjs';
 import { roster, balance } from './fixtures/live.mjs';
 
 const M = DEFAULT_MONEY;
@@ -57,4 +57,13 @@ test('missing values format as a dash rather than NaN', () => {
 test('fromUsd is the inverse, for detector floors', () => {
   assert.equal(fromUsd(50, M), 50_000_000);
   assert.equal(toUsd(fromUsd(50, M), M), 50);
+});
+
+test('revenueModel reads the roster rate in basis points, and an absent rate is unknown, not 0%', () => {
+  assert.deepEqual(revenueModel(1000), { rateBp: 1000, percent: 10, split: false, label: '10% revenue share' });
+  assert.deepEqual(revenueModel(500), { rateBp: 500, percent: 5, split: true, label: '5% GGR, split across providers' });
+  assert.equal(revenueModel(750).label, '7.5% GGR');
+  assert.equal(revenueModel(0).label, '0% GGR', 'a reported zero is a reported zero');
+  assert.equal(revenueModel('1000').rateBp, 1000);
+  for (const none of [null, undefined, '', 'ten', NaN]) assert.equal(revenueModel(none), null, String(none));
 });

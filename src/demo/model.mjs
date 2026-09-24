@@ -245,16 +245,16 @@ export function api(model) {
       const from = parseEdge(range?.start, false) ?? monthStart(model.now);
       const to = parseEdge(range?.end, true) ?? model.now;
       return ok(live.map((g) => ({ name: g.name, slug: g.slug, image: g.image,
-        stats: { ...statsOf(sum(totals(model, g.slug, from, to))), unique: uniquePlayers(model, g, from, to) } })), `/teams/${DEMO_TEAM}/stats`);
+        stats: { ...statsOf(sum(totals(model, g.slug, from, to))), unique: uniquePlayers(model, g, from, to), rate: 1000 } })), `/teams/${DEMO_TEAM}/stats`);
     },
     teamGames() {
       const ms = monthStart(model.now), today = dayStart(model.now);
       const shape = (t) => { const s = statsOf(t); return { count: s.count, turnover: s.turnover, profit: s.profit, expected: 0 }; };
       return ok([
-        ...live.map((g) => ({ name: g.name, slug: g.slug, rating: g.rating, published: true, isLive: true,
+        ...live.map((g) => ({ name: g.name, slug: g.slug, rating: g.rating, published: true, isLive: true, approval: { column: 'responded' },
           stats: { month: shape(sum(totals(model, g.slug, ms, model.now))), day: shape(sum(totals(model, g.slug, today, model.now))) },
           onlinePlayers: online(model, g) })),
-        ...model.unreleased.map((name) => ({ name, slug: slugOf(name), rating: 30, published: false, isLive: false, stats: null, onlinePlayers: 0 })),
+        ...model.unreleased.map((name) => ({ name, slug: slugOf(name), rating: 30, published: false, isLive: false, approval: { column: 'new' }, stats: null, onlinePlayers: 0 })),
       ], `/teams/${DEMO_TEAM}/games`);
     },
     gameStats(slug) {

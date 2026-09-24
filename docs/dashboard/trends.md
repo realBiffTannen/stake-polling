@@ -1,7 +1,7 @@
 ---
 title: Trends
 parent: The web dashboard
-nav_order: 6
+nav_order: 7
 description: "Players online every poll, 30 days of daily figures, turnover by game, the hour-by-day heatmap, the zoomable daily trend and the retention metric."
 ---
 
@@ -18,10 +18,13 @@ metric.
 
 ## Players online, every poll
 
-One point per poll from the collector's trail. The range picker offers **6h**,
-**24h** (the default), **3d** and **7d**. Past a day, each point is the peak of
-15 minutes of polls. A missed poll breaks the line; hover for the reading. The
-range is in the address: `/trends?online=7d`.
+One point per poll from the collector's trail. The range picker offers, shortest
+first, **30m**, **1h**, **3h**, **6h**, **24h** (the default), **3d** and **7d**.
+Past a day, each point is the peak of 15 minutes of polls. A missed poll breaks
+the line; hover for the reading. The time axis is labelled every ten minutes
+for the shortest ranges, up to every two days for a week. The range is in the
+address: `/trends?online=30m`. A game page's players-online chart offers the
+same ranges.
 
 ## The last 30 days
 

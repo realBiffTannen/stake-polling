@@ -10,6 +10,7 @@ import { msToNextBoundary, periodMs } from '../../poll/schedule.mjs';
 
 const NAV = [
   { key: 'overview', href: '/', glyph: '▦', label: 'Overview' },
+  { key: 'games', href: '/games', glyph: '▤', label: 'Games' },
   { key: 'analysis', href: '/analysis', glyph: '◔', label: 'Analysis' },
   { key: 'settlement', href: '/settlement', glyph: '$', label: 'Settlement' },
   { key: 'insights', href: '/insights', glyph: '◫', label: 'Player insights' },

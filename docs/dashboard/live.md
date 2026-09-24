@@ -1,7 +1,7 @@
 ---
 title: Live operations
 parent: The web dashboard
-nav_order: 5
+nav_order: 6
 description: "The collector's own roster with per-poll rates, the live stream strips, possible events, running action and findings."
 ---
 
