@@ -92,6 +92,7 @@ In sidebar order:
 | Page | Route | What it shows |
 |---|---|---|
 | [Overview](overview.md) | `/` | One line per game, month to date, and the titles not yet live |
+| [Games](games.md) | `/games` | The catalogue: every title with its Engine rating, status, revenue model and approval stage, and the titles not yet live |
 | [Analysis](analysis.md) | `/analysis` | Every chart with its conclusion, scoped by a time picker |
 | [Settlement](settlement.md) | `/settlement` | What would be settled if the month ended now, and whether the endpoints agree |
 | [Player insights](insights.md) | `/insights` | Daily players, new and returning, with CSV and PDF export |

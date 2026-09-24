@@ -1,7 +1,7 @@
 ---
 title: Trends
 parent: The web dashboard
-nav_order: 6
+nav_order: 7
 description: "Players online every poll, 30 days of daily figures, turnover by game, the hour-by-day heatmap, the zoomable daily trend and the retention metric."
 ---
 

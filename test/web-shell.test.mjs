@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shell, documentFor } from '../src/web/views/shell.mjs';
+import { shell, documentFor, PAGES } from '../src/web/views/shell.mjs';
 import { LOGO_SVG } from '../src/web/brand/logo.mjs';
 
 const state = { meta: { team: 'acme-studios' }, stale: false, ageMs: 1000, now: Date.parse('2026-09-19T12:00:00Z') };
@@ -26,7 +26,7 @@ test('the vendored wordmark is the invert (white) artwork', () => {
 
 test('every page in the nav is linked from the shell', () => {
   const out = String(shell({ state, body: 'x', active: 'insights', title: 'Player insights' }));
-  for (const href of ['/', '/analysis', '/settlement', '/insights', '/live', '/trends', '/math', '/log']) {
+  for (const href of ['/', '/games', '/analysis', '/settlement', '/insights', '/live', '/trends', '/math', '/log']) {
     assert.match(out, new RegExp(`href="${href.replace('/', '\\/')}"`), href);
   }
 });
@@ -36,6 +36,13 @@ test('the overview is the first page in the nav, and player insights no longer s
   const links = [...nav.matchAll(/href="([^"]*)"[^>]*>(?:<span[^>]*>[^<]*<\/span>)?\s*([^<]+)</g)].map(m => [m[1], m[2].trim()]);
   assert.deepEqual(links[0], ['/', 'Overview']);
   assert.deepEqual(links.find(([, label]) => label === 'Player insights'), ['/insights', 'Player insights']);
+});
+
+test('Games sits right after Overview in the nav, and the palette offers it', () => {
+  const nav = String(shell({ state, body: 'x', active: 'overview', title: 'Overview' })).match(/<nav[^>]*>([\s\S]*?)<\/nav>/)[1];
+  const links = [...nav.matchAll(/href="([^"]*)"[^>]*>(?:<span[^>]*>[^<]*<\/span>)?\s*([^<]+)</g)].map(m => [m[1], m[2].trim()]);
+  assert.deepEqual(links.slice(0, 2), [['/', 'Overview'], ['/games', 'Games']]);
+  assert.ok(PAGES.some((p) => p.href === '/games' && p.label === 'Games'));
 });
 
 test('the active page is marked active exactly once', () => {

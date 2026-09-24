@@ -1,7 +1,7 @@
 ---
 title: Player insights
 parent: The web dashboard
-nav_order: 4
+nav_order: 5
 description: "Daily players, new and returning, per game and per month, with CSV and PDF export."
 ---
 
