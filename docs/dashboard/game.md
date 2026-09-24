@@ -1,7 +1,7 @@
 ---
 title: Game pages
 parent: The web dashboard
-nav_order: 11
+nav_order: 12
 description: "One game in depth: bet modes, P/L by mode, noise bands, hold, economics, players, the tape, launch checks, captured math and trends. Also the bet-mode and bucket-cadence pages."
 ---
 

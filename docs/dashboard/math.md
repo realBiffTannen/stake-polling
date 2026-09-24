@@ -1,7 +1,7 @@
 ---
 title: Game math
 parent: The web dashboard
-nav_order: 7
+nav_order: 8
 description: "Your captured math models, drift warnings, and dismissing standing warnings for everyone."
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: Settlement
 parent: The web dashboard
-nav_order: 3
+nav_order: 4
 description: "What would be settled if the month ended now, the luck gap, the month-end projection, and whether the endpoints reconcile."
 ---
 

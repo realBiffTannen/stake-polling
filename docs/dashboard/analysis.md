@@ -1,7 +1,7 @@
 ---
 title: Analysis
 parent: The web dashboard
-nav_order: 2
+nav_order: 3
 description: "Every chart states its conclusion: the span picker, the players, correlation and contribution panels, and the interactive treemap and Sankey."
 ---
 

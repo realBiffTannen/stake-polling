@@ -502,3 +502,21 @@ test('each row carries the roster\'s revenue rate in basis points, and a roster 
   const pending = stateOf({ roster, catalogue: [...CATALOGUE, { name: 'Hippo Hustle', slug: 'hippo-hustle', isLive: true, published: true, stats: null, onlinePlayers: 0 }] }).rows.find((r) => r.name === 'hippo-hustle');
   assert.equal(pending?.rate, null, 'a pending row has no rate');
 });
+
+test('lifetime bets, players and studio P/L are attached per slug, for every title the snapshot lists', () => {
+  const data = [
+    { slug: 'berry', stats: { count: 12000, turnover: 9_000_000_000, profit: 400_000_000, unique: 350 } },
+    { slug: 'retired-title', stats: { count: 10, turnover: 500_000_000, profit: -20_000_000, unique: 3 } },
+  ];
+  const money = { unitsPerDollar: 1_000_000, profitShare: 0.1, expectedShare: 0.075 };
+  const state = buildState(withLifetime(data), TRAILS, NOW, { ...config, money, lifetimeStart: '2026-07-24' });
+  assert.deepEqual(state.lifetimeGames.berry, { count: 12000, unique: 350, turnoverUsd: 9000, profitUsd: 40 });
+  // Gone from the roster, still in the snapshot: the Games page lists it from the catalogue.
+  assert.deepEqual(state.lifetimeGames['retired-title'], { count: 10, unique: 3, turnoverUsd: 500, profitUsd: -2 });
+  assert.deepEqual(buildState(withLifetime(null), TRAILS, NOW, config).lifetimeGames, {}, 'no snapshot: nothing, not zeros');
+});
+
+test('a lifetime entry missing a figure reports that figure as null, never as a zero', () => {
+  const state = buildState(withLifetime([{ slug: 'berry', stats: { turnover: 9_000_000_000 } }]), TRAILS, NOW, config);
+  assert.deepEqual(state.lifetimeGames.berry, { count: null, unique: null, turnoverUsd: 9000, profitUsd: null });
+});

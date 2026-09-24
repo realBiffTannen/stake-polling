@@ -2,7 +2,7 @@
 title: Overview
 parent: The web dashboard
 nav_order: 1
-description: "The landing page: one line per live game, month to date, every title in the catalogue with its Engine star rating, and the titles not yet live."
+description: "The landing page: one line per live game, month to date, with the catalogue and the titles not yet live beneath. Every table sorts by any column."
 ---
 
 # Overview
@@ -38,32 +38,11 @@ One row per roster game, sorted by turnover, with a total row:
 Month to date runs from the 1st at 00:00Z. A game that is live but has no
 figures yet shows dashes and the tag **live, nothing yet**, rather than `$0.00`.
 
-## Games
+Click a column heading to sort by it, and again to reverse. Numbers start
+biggest first, text A to Z; a figure nobody measured sorts last either way, and
+the Total row stays at the bottom. The choice is remembered for the tab.
 
-Every title in the studio's catalogue, live or not, live titles first and then
-by name:
+## Games, and Not yet live
 
-| Column | Meaning |
-|---|---|
-| Game | Opens its game page |
-| Rating | The star rating the Engine studio shows for the title, out of three (the catalogue's `rating` over 30, rounded, as the studio's own games list draws it), or **Unrated** |
-| Status | **Live**, **Not live** or **Unpublished** |
-| Revenue model | From the rate the roster reports for the game, in basis points: **10% revenue share** (1000) or **5% GGR, split across providers** (500); any other rate is shown as its percentage. A dash for a title not on the roster, which reports no rate |
-| Approval stage | As the catalogue reports it |
-| Engine | Opens the title's page on the Engine studio (`studio.engine.io/teams/<team>/games/<slug>`) in a new tab |
-
-## Not yet live
-
-Every catalogue title that is not turned on, with what is known about it:
-
-| Column | Meaning |
-|---|---|
-| Game | Opens its game page, built from its captured math |
-| Status | **Unpublished**, **Published · not live** or **Not live** |
-| Approval stage | As the catalogue reports it |
-| Captured RTP, Modes, Max win | From your [math.json](../configuration/math-json.md), or a dash |
-
-The API reports no play for these titles, so there are no money columns.
-
-For the collector's own view of the roster, with per-poll rates and findings,
-see [Live operations](live.md).
+The catalogue and the titles not yet live, exactly as the [Games](games.md)
+page shows them - the same code draws both.

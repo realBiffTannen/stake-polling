@@ -158,3 +158,20 @@ test('stacked bars can leave their legend to the page', () => {
   assert.doesNotMatch(out, /y="2" width="10" height="10"/);
   assert.match(String(stackedBars({ rows: [{ a: 1 }], keys: ['a'], labels: ['x'] })), /y="2" width="10" height="10"/, 'drawn by default');
 });
+
+test('a line chart whose values cross zero draws a solid zero line exactly where the 0 tick sits', () => {
+  const out = String(lineChart({ series: [{ name: 'p/l', colour: '#fff', values: [10, 450, -900, 90] }], labels: ['01', '07', '19', '00'] }));
+  const zero = /<line class="zero-line"[^>]*y1="(-?\d+(?:\.\d+)?)"[^>]*y2="(-?\d+(?:\.\d+)?)"/.exec(out);
+  assert.ok(zero, 'a zero line is drawn');
+  assert.equal(zero[1], zero[2], 'it is horizontal');
+  const gridAtZero = /<line class="gridline"[^>]*y1="([^"]+)"[^>]*\/>\s*<text class="axis-label"[^>]*>0<\/text>/.exec(out);
+  assert.ok(gridAtZero, 'the 0 tick is labelled');
+  assert.equal(Number(zero[1]), Number(gridAtZero[1]), 'the zero line sits on the 0 tick');
+});
+
+test('a line chart that never crosses zero draws no zero line', () => {
+  for (const values of [[1, 2, 3], [-3, -2, -1], [0, 2, 4]]) {
+    const out = String(lineChart({ series: [{ name: 'a', colour: '#fff', values }], labels: ['a', 'b', 'c'] }));
+    assert.doesNotMatch(out, /zero-line/, JSON.stringify(values));
+  }
+});

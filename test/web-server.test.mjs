@@ -544,3 +544,13 @@ test('the daily breakdown exports as CSV and as PDF, for the same selection', as
   assert.match(body, /\(2026-09-17 \\\(in progress\\\)\) Tj/, 'the row, its parentheses escaped for PDF');
   assert.match(body, /\(\$100\.00\) Tj/, 'turnover, formatted as on the page');
 });
+
+test('/games serves the catalogue page, and is cached like every other page', async t => {
+  const base = await setup(t);
+  const res = await fetch(base + '/games');
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /<h1>Games<span>\.<\/span><\/h1>/);
+  assert.match(body, /No titles in the catalogue yet/);
+  assert.equal((await fetch(base + '/games/')).status, 404);
+});
