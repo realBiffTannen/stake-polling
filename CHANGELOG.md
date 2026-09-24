@@ -8,6 +8,9 @@
 - **Zero line** on the hour-by-hour studio P/L chart (and any line chart whose values cross zero), so which side of nothing the day is on reads at a glance.
 - **Players-online ranges:** *30m*, *1h* and *3h* join *6h / 24h / 3d / 7d* on Trends and on every game page, shortest first. The time axis now labels short ranges by the minute (every ten minutes for an hour or less) instead of on whole hours only.
 
+### Changed
+- **Demo:** the made-up catalogue now reports approval stages, so the Games page shows them; the docs screenshots are refreshed from it, with one of the Games page.
+
 ## 1.1.0 - 2026-09-23
 
 ### Added
