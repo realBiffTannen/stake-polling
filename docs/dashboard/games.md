@@ -9,6 +9,10 @@ description: "The catalogue: every title the studio has, live or not, with its E
 
 Route: `/games`
 
+![The Games page of the demo dashboard: the catalogue with lifetime figures, one row opened into its details](../screenshots/games.png)
+
+*From the demo: every game and figure is made up.*
+
 The studio's catalogue, every title live or not. The same two tables sit under
 the money table on the [Overview](overview.md); they are drawn by the same
 code, so the two pages never disagree.
