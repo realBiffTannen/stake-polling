@@ -142,6 +142,9 @@ export function buildState(dashboard, trails, now = Date.now(), config = {}) {
     // turnover it actually took. The LIFETIME TURN column therefore need not
     // add up to this tile, and that is the correct behaviour rather than a
     // discrepancy - the table shows the roster, this shows the studio.
+    // Per title, keyed by slug, for the Games page: every title the snapshot
+    // lists, on the roster or not, each figure measured or null.
+    lifetimeGames: lifetimeGamesOf(dashboard?.lifetime?.data, money),
     lifetime: {
       turnover: lifetime.size ? toUsd([...lifetime.values()].reduce((a, b) => a + b, 0), money) : null,
       from: config.lifetimeStart ?? null,
@@ -209,6 +212,24 @@ function pendingRow(slug, entry, lifetimeTurnover = null, money = DEFAULT_MONEY)
  * reading at all. `Number(undefined)` and `Number(null)` are both 0, which
  * would put a confident $0.00 next to a month-to-date total contradicting it.
  */
+function lifetimeGamesOf(data, money) {
+  const out = {};
+  for (const entry of gameList(data)) {
+    const slug = entry?.slug ?? entry?.name;
+    if (!slug) continue;
+    const stats = entry?.stats ?? entry ?? {};
+    const pick = (v) => (measured(v) ? Number(v) : null);
+    const profit = pick(stats.profit);
+    out[slug] = {
+      count: pick(stats.count),
+      unique: pick(stats.unique),
+      turnoverUsd: toUsd(pick(stats.turnover), money),
+      profitUsd: profit === null ? null : toShareUsd(profit, money.profitShare, money),
+    };
+  }
+  return out;
+}
+
 function lifetimeBySlug(data) {
   const map = new Map();
   for (const entry of gameList(data)) {

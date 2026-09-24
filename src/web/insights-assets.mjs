@@ -310,6 +310,21 @@ meter.level::-moz-meter-bar{background:var(--mint);border-radius:999px}
 .engine-link{color:var(--link);white-space:nowrap}
 .model{white-space:nowrap}
 .model.split{color:var(--violet)}
+.expand{background:none;border:1px solid var(--stroke-strong);color:var(--dim);border-radius:4px;width:18px;height:18px;line-height:1;font-size:10px;padding:0;margin-right:9px;cursor:pointer;vertical-align:middle;font-family:inherit}
+.expand:hover,.expand:focus-visible{color:var(--text);border-color:var(--dim)}
+.expand span{display:inline-block;transition:transform .15s var(--ease)}
+.expand[aria-expanded=true] span{transform:rotate(90deg)}
+html:not(.js) .expand{display:none}
+.js tr.game-details{display:none}
+.js tr.game-details.open{display:table-row}
+tr.game-details td{text-align:left;white-space:normal;padding:12px 12px 20px 36px;background:rgba(148,163,184,.04)}
+.details-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px 28px;font-size:11px}
+.details-grid h4{margin:0 0 7px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#7f90aa;font-weight:600}
+.details-grid dl{margin:0;display:grid;grid-template-columns:max-content 1fr;gap:3px 12px}
+.details-grid dt{color:var(--dim)}
+.details-grid dd{margin:0;font-variant-numeric:tabular-nums}
+.details-grid p{margin:0}
+.details-links{display:flex;flex-wrap:wrap;gap:6px 18px;align-self:end}
 .accordion p{padding:0 2px 16px;font-size:12px;line-height:1.8;color:#8fa0b8;max-width:900px}
 .timeline{position:relative;padding-left:22px}
 .timeline::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;border-radius:2px;background:linear-gradient(180deg,rgba(134,225,196,.5),rgba(148,163,184,.12))}
@@ -715,9 +730,14 @@ export const INSIGHTS_JS = `
     const body = table.tBodies && table.tBodies[0];
     if (!th || !th.dataset.sort || !body) return;
     const kind = th.dataset.sort;
-    // Full rows only: a one-cell "nothing here" row spanning the table stays put.
-    const rows = [...body.rows].filter((r) => r.cells.length === ths.length);
-    const keyed = rows.map((r, i) => ({ r, i, k: sortKey(r.cells[col], kind) }));
+    // A full row and the part rows under it (a game's details row) move as
+    // one; a one-cell "nothing here" row before the first full row stays put.
+    const groups = [];
+    for (const r of body.rows) {
+      if (r.cells.length === ths.length) groups.push({ r, rest: [] });
+      else if (groups.length) groups[groups.length - 1].rest.push(r);
+    }
+    const keyed = groups.map((g, i) => ({ ...g, i, k: sortKey(g.r.cells[col], kind) }));
     const sign = dir === 'desc' ? -1 : 1;
     keyed.sort((a, b) => {
       const an = a.k === null || a.k === '', bn = b.k === null || b.k === '';
@@ -725,7 +745,7 @@ export const INSIGHTS_JS = `
       const c = kind === 'number' ? a.k - b.k : (a.k < b.k ? -1 : a.k > b.k ? 1 : 0);
       return sign * c || a.i - b.i;
     });
-    keyed.forEach(({ r }) => body.appendChild(r));
+    keyed.forEach(({ r, rest }) => { body.appendChild(r); rest.forEach((x) => body.appendChild(x)); });
     ths.forEach((h, i) => { if (h.dataset.sort) h.setAttribute('aria-sort', i === col ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'); });
   }
   function toggleSort(th) {
@@ -748,8 +768,29 @@ export const INSIGHTS_JS = `
       });
       const pref = prefs[table.dataset.sortable];
       if (pref && Number.isInteger(pref.col)) applySort(table, pref.col, pref.dir === 'desc' ? 'desc' : 'asc');
+      [...table.querySelectorAll('[data-expand]')].forEach((b) => { if (openRows.has(b.dataset.expand)) setOpen(b, true); });
     });
   }
+  // Expandable rows: a [data-expand="slug"] button opens the details row
+  // right under its game (sorting keeps it there). Open slugs are remembered
+  // so a row stays open through the fragment refresh.
+  const openRows = new Set();
+  function detailsFor(button) {
+    const tr = button.closest('tr');
+    const next = tr && tr.nextElementSibling;
+    return next && next.dataset && next.dataset.detailsFor === button.dataset.expand ? next : null;
+  }
+  function setOpen(button, open) {
+    const row = detailsFor(button);
+    if (!row) return;
+    row.classList.toggle('open', open);
+    button.setAttribute('aria-expanded', String(open));
+    if (open) openRows.add(button.dataset.expand); else openRows.delete(button.dataset.expand);
+  }
+  document.addEventListener('click', (e) => {
+    const button = e.target && e.target.closest ? e.target.closest('[data-expand]') : null;
+    if (button) setOpen(button, button.getAttribute('aria-expanded') !== 'true');
+  });
   document.addEventListener('click', (e) => {
     const th = e.target && e.target.closest ? e.target.closest('table[data-sortable] thead th[data-sort]') : null;
     if (th) toggleSort(th);

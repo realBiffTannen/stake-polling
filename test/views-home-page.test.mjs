@@ -107,13 +107,17 @@ test('each title shows the studio dashboard star rating out of three, or Unrated
   assert.doesNotMatch(row('Base Line'), /stars"/, 'no stars invented for an unrated title');
 });
 
-test('each title says whether it is live, and its approval stage', () => {
+test('a live title shows Live where its approval stage goes; a dark one shows its stage, and its status in the details', () => {
   const out = games(render());
   const row = (name) => { const a = out.indexOf(name); return out.slice(a, out.indexOf('</tr>', a)); };
-  assert.match(row('Berry'), />Live</);
-  assert.match(row('Berry'), />responded</);
-  assert.match(row('Metro Night Run'), />Not live</);
-  assert.match(row('Base Line'), />Unpublished</);
+  const details = (slug) => { const a = out.indexOf(`data-details-for="${slug}"`); return out.slice(a, out.indexOf('</tr>', a)); };
+  assert.doesNotMatch(out, /<th[^>]*>Status<\/th>/, 'no Status column');
+  assert.match(row('Berry'), /<span class="pill live">Live<\/span>/);
+  assert.doesNotMatch(row('Berry'), />responded</);
+  assert.match(details('berry'), />responded</);
+  assert.match(row('Metro Night Run'), /<td>new<\/td>/);
+  assert.match(details('metro-night-run'), />Published · not live</);
+  assert.match(details('baseline'), />Unpublished</);
 });
 
 test('each title links to its page on the Engine studio, in a new tab, and the link goes when no team is known', () => {
