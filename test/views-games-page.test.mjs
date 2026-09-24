@@ -34,8 +34,9 @@ test('the Games page is the active nav entry', () => {
   assert.equal((out.match(/class="active"/g) ?? []).length, 1);
 });
 
-test('the Games page and the Overview draw the catalogue from the same code, so they cannot drift', () => {
-  assert.equal(catalogue(String(renderGames(state))), catalogue(String(renderHome(state))));
+test('the catalogue lives on the Games page alone: the Overview is today\'s charts', () => {
+  assert.match(catalogue(String(renderGames(state))), /Berry/);
+  assert.equal(catalogue(String(renderHome(state))), '');
 });
 
 test('an empty catalogue says so on the Games page rather than rendering bare tables', () => {

@@ -48,18 +48,17 @@ function utcMidnight(ts) {
 }
 
 /**
- * Gross profit change over (from, to], raw units, from a month-to-date trail.
+ * A month-to-date trail's readings of `field`, oldest first, with the lagging
+ * ones taken out.
  *
  * A reading below the high-water mark of the monotonic counters (count,
  * turnover) is a lagging read replica and is dropped outright - differencing
- * across it would book a fake loss and then a fake recovery. An interval that
- * crosses a month boundary is the reset, not play, and is skipped. Null
- * unless the trail holds a reading at or before `from` (without one the slice
- * would be partial) and at least one interval lands inside it.
+ * across it would book a fake loss and then a fake recovery. The mark resets
+ * with the month, since the counters do. The today page (today.mjs) reads its
+ * running figures through the same filter, so the two cannot disagree.
  */
-function profitBetween(trail, from, to) {
-  const samples = (Array.isArray(trail) ? trail : []).filter((s) => measured(s?.ts) && measured(s?.fields?.profit));
-  if (!samples.length || Number(samples[0].ts) > from) return null;
+export function steadyReadings(trail, field) {
+  const samples = (Array.isArray(trail) ? trail : []).filter((s) => measured(s?.ts) && measured(s?.fields?.[field]));
   const kept = [];
   let hw = null;
   for (const s of samples) {
@@ -72,6 +71,19 @@ function profitBetween(trail, from, to) {
     if (turnover !== null) hw.turnover = turnover;
     kept.push(s);
   }
+  return kept;
+}
+
+/**
+ * Gross profit change over (from, to], raw units, from a month-to-date trail
+ * (steadyReadings above). An interval that crosses a month boundary is the
+ * reset, not play, and is skipped. Null unless the trail holds a reading at
+ * or before `from` (without one the slice would be partial) and at least one
+ * interval lands inside it.
+ */
+function profitBetween(trail, from, to) {
+  const kept = steadyReadings(trail, 'profit');
+  if (!kept.length || Number(kept[0].ts) > from) return null;
   let total = 0, counted = 0;
   for (let i = 1; i < kept.length; i++) {
     const prev = kept[i - 1], cur = kept[i];

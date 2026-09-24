@@ -215,13 +215,21 @@ const server = createWebServer({ log, exporter, archive, auth, dismissals, versi
   // How often each endpoint is polled, in ticks - the freshness check needs it
   // to tell a stale snapshot from one that is simply polled less often.
   state.cadence = config.intervals ?? {};
-  // The team trail back to just before yesterday's 00:00Z, only for the view
-  // that compares today with the same slice of yesterday. By time, not count:
-  // the trail's spacing has changed over its life.
-  if (hint?.teamDays) {
+  // The team trail back to just before yesterday's 00:00Z, for the views
+  // that compare today with the same slice of yesterday (settlement, and the
+  // landing's running P/L), and players online over the same reach for the
+  // landing's yesterday line. By time, not count: the trail's spacing has
+  // changed over its life.
+  if (hint?.teamDays || hint?.onlineDays) {
     const d = new Date(now);
     const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-    state.teamTrail = await readTeamTrailSince(client, k, midnight - (hint.teamDays - 1) * 86_400_000 - 30 * 60_000);
+    const since = (days) => midnight - (days - 1) * 86_400_000 - 30 * 60_000;
+    const [team, online] = await Promise.all([
+      hint.teamDays ? readTeamTrailSince(client, k, since(hint.teamDays)) : null,
+      hint.onlineDays ? readSince(client, k.tsOnline, since(hint.onlineDays)) : null,
+    ]);
+    if (team) state.teamTrail = team;
+    if (online) state.onlineSince = online;
   }
   // The per-mode trail is otherwise never fetched on this path (see readData
   // above) - reading it for every game on every request would double the

@@ -49,7 +49,8 @@ function trendsHref({ online = null, turnover = null }, hash = '') {
 
 // A legend swatch is an SVG fill, not a style attribute: the page's CSP
 // (style-src 'self') drops inline styles, which would leave every swatch blank.
-const swatch = (fills) => html`<svg class="swatch" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">${fills.map((fill, i) =>
+/** A legend swatch as inline SVG: the page's CSP allows no style attribute. */
+export const swatch = (fills) => html`<svg class="swatch" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">${fills.map((fill, i) =>
   html`<rect x="${(10 / fills.length) * i}" width="${10 / fills.length}" height="10" fill="${fill}"/>`)}</svg>`;
 
 /**

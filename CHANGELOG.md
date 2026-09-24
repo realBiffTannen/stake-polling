@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0 - 2026-09-24
+
+### Changed
+- **The Overview is today, in charts.** The landing page now shows the UTC day since 00:00:00Z - the day the Engine studio dashboard reports - drawn rather than tabulated:
+  - five KPI tiles (studio P/L, turnover, bets, players online, RTP), each with a sparkline or bar and a change on the same hours of yesterday, carried by an arrow and words as well as colour;
+  - the running studio P/L on a fixed 00:00-24:00 axis, green above zero and red below, with yesterday's whole day dashed behind it;
+  - turnover per hour stacked by game, and studio P/L per hour, with the hours still to come shaded;
+  - a game-by-hour turnover heat grid (square-root scale; a missed hour is an outline, never a colour);
+  - studio P/L by game and each game's share of today's turnover;
+  - players online through the day against yesterday;
+  - a month-to-date strip at the foot, linking to the Games page.
+
+  The month-by-game table, the catalogue and the not-yet-live table leave the landing; the catalogue and not-yet-live tables stay on the Games page.
+- The landing reads two days of the team trail and of players online, by time, for the yesterday comparisons.
+
+### Added
+- Two server-drawn SVG charts: a whole-day curve with a ghost series and a polarity fill (`charts/day.mjs`), and a heat grid (`charts/grid.mjs`). Column and stacked-bar charts can shade the slots still to come, and stacked bars take a hover readout per stack.
+
 ## 1.2.0 - 2026-09-24
 
 ### Added

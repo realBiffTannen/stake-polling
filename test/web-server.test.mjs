@@ -375,7 +375,8 @@ test('the root is the overview, not player insights', async t => {
   assert.equal(res.status, 200);
   const body = await res.text();
   assert.match(body, /Overview/);
-  assert.match(body, /href="\/game\/berry"/);
+  assert.match(body, /<h1>Today<span>\.<\/span><\/h1>/);
+  assert.match(body, /href="\/games"/, 'every game is one click away');
   assert.doesNotMatch(body, /class="filters"/, 'no insights filter form on the overview');
 });
 test('player insights is served at /insights, fragment included', async t => {
@@ -460,12 +461,17 @@ test('a game page asks for that game\'s mode trail only', async t => {
   assert.equal(hints.at(-1).modesFor, null, 'the mode drilldown has no tape');
 });
 
-test('only the settlement page asks for two days of the team trail', async t => {
+test('the settlement page and the landing ask for two days of the team trail; only the landing for two of players online', async t => {
   const { base, hints } = await setupHinted(t);
   await fetch(base + '/settlement');
   assert.equal(hints.at(-1).teamDays, 2);
+  assert.equal(hints.at(-1).onlineDays, null);
+  await fetch(base + '/');
+  assert.equal(hints.at(-1).teamDays, 2);
+  assert.equal(hints.at(-1).onlineDays, 2);
   await fetch(base + '/analysis');
   assert.equal(hints.at(-1).teamDays, null);
+  assert.equal(hints.at(-1).onlineDays, null);
 });
 
 test('/log serves a page of the poll log from the injected reader, passing the query through', async t => {

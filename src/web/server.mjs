@@ -141,7 +141,7 @@ export function createWebServer({ read, log = null, exporter = null, archive = n
     if (url.pathname === '/archive' && !archive) return text(404, 'Page not found');
     if (url.pathname === '/' && INSIGHTS_PARAMS.some(p => url.searchParams.has(p))) return text(302, '', { location: `/insights?${url.searchParams}` });
     try {
-      const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: url.pathname === '/settlement' ? 2 : null, history: historyFor(url), trailHours: trailHoursFor(url) });
+      const { model, state } = await read(queryFor(url), { bucketsSlug: bucketsSlugFrom(url.pathname), modesFor: modesFor(url), teamDays: ['/settlement', '/'].includes(url.pathname) ? 2 : null, onlineDays: url.pathname === '/' ? 2 : null, history: historyFor(url), trailHours: trailHoursFor(url) });
       if (url.pathname === '/healthz') return { status: 200, type: 'application/json', body: JSON.stringify({ ok: true, version: VERSION, collectorStale: !!state.stale, dailySyncError: model.snapshot.error ?? null }) };
       if (url.pathname.startsWith('/game/')) {
         let parts;

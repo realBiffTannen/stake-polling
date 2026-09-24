@@ -16,8 +16,13 @@ import { MODE_COLOURS } from '../svg.mjs';
  * stack would push the bar's accumulated offset past its neighbours and
  * overflow the canvas. Not for signed data such as profit/loss.
  */
+/**
+ * `tips`, when given, is one hover readout per row (the dashboard's data-tip
+ * shape) and replaces the native title. `futureFrom` shades the slots from
+ * that index on as not yet happened, as columns() does.
+ */
 export function stackedBars({ rows = [], keys = [], labels = [], colours = MODE_COLOURS,
-  width = 900, height = 260, title = '', format = (v) => String(Math.round(v)), legend = true } = {}) {
+  width = 900, height = 260, title = '', format = (v) => String(Math.round(v)), legend = true, tips = null, futureFrom = null } = {}) {
   const totals = rows.map(r => keys.reduce((a, k) => a + (valid(r[k]) ? Number(r[k]) : 0), 0));
   const max = Math.max(1, ...totals);
   const axis = niceAxis(0, max, 4);
@@ -30,10 +35,14 @@ export function stackedBars({ rows = [], keys = [], labels = [], colours = MODE_
   return html`<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}"><title>${title}</title>
     ${axis.ticks.map(t => html`<g><line class="gridline" x1="${pad.left}" x2="${pad.left + plotW}" y1="${ys(t)}" y2="${ys(t)}"/>
       <text class="axis-label" x="${pad.left - 8}" y="${ys(t) + 4}" text-anchor="end">${format(t)}</text></g>`)}
+    ${futureFrom !== null && futureFrom < rows.length ? html`<rect class="future-zone" x="${pad.left + step * futureFrom}" y="${pad.top}" width="${step * (rows.length - futureFrom)}" height="${plotH}"/>` : null}
     ${rows.map((row, i) => {
       const x = pad.left + step * (i + 0.5) - bar / 2;
       let acc = 0;
-      return html`<g><title>${labels[i]}: ${keys.map(k => `${k} ${valid(row[k]) ? format(row[k]) : '-'}`).join(', ')}</title>
+      const head = tips?.[i]
+        ? html`<g class="hit" data-tip="${JSON.stringify(tips[i])}"><rect x="${pad.left + step * i}" y="${pad.top}" width="${step}" height="${plotH}" fill="transparent"/>`
+        : html`<g><title>${labels[i]}: ${keys.map(k => `${k} ${valid(row[k]) ? format(row[k]) : '-'}`).join(', ')}</title>`;
+      return html`${head}
         ${keys.map((k, j) => {
           const v = valid(row[k]) ? Number(row[k]) : 0;
           const y = ys(acc + v), h = Math.max(0, ys(acc) - ys(acc + v));
