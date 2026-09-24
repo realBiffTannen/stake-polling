@@ -245,7 +245,7 @@ export function api(model) {
       const from = parseEdge(range?.start, false) ?? monthStart(model.now);
       const to = parseEdge(range?.end, true) ?? model.now;
       return ok(live.map((g) => ({ name: g.name, slug: g.slug, image: g.image,
-        stats: { ...statsOf(sum(totals(model, g.slug, from, to))), unique: uniquePlayers(model, g, from, to) } })), `/teams/${DEMO_TEAM}/stats`);
+        stats: { ...statsOf(sum(totals(model, g.slug, from, to))), unique: uniquePlayers(model, g, from, to), rate: 1000 } })), `/teams/${DEMO_TEAM}/stats`);
     },
     teamGames() {
       const ms = monthStart(model.now), today = dayStart(model.now);

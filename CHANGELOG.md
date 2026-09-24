@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 - 2026-09-23
 
 ### Added
 - **Games table on the Overview:** every title in the catalogue, live or not, with the star rating the Engine studio shows for it (out of three; the catalogue's `rating` over 30, rounded, as the studio's own games list draws it, or *Unrated*), whether it is live, its approval stage, a link to its game page and a link to its page on the Engine studio. The money table is now titled *Live games this month*.
+- **Revenue model per game,** in the same table: the roster's `rate` (basis points) read as the **10% revenue share** or the **5% GGR split across providers**, with a dash for a title not on the roster. Roster rows now carry `rate`; the demo roster reports 1000.
 
 ### Changed
 - **Analysis:** *Unusual days* and *The tape* start folded; the heading and its conclusion stay in view and an arrow opens the list. An opened fold stays open through the live refresh.

@@ -55,6 +55,9 @@ export function buildState(dashboard, trails, now = Date.now(), config = {}) {
       profit,
       unique: num(stats.unique),
       expectedProfit: num(stats.expectedProfit),
+      // The revenue-share rate in basis points (1000 = 10%). Not num(): a
+      // roster that does not report it must read as unknown, not as 0%.
+      rate: rateOf(stats.rate),
       online: online.get(name) ?? null,
       // RTP is computed from the GROSS figures - it is a property of the game,
       // not of the studio's share of it.
@@ -155,6 +158,13 @@ export function buildState(dashboard, trails, now = Date.now(), config = {}) {
  * only thing actually known about this game is that it is on and how many
  * people are on it - which is precisely the fact worth showing at a launch.
  */
+/** A finite number or null - never a coerced zero for a field the API left out. */
+function rateOf(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function pendingRow(slug, entry, lifetimeTurnover = null, money = DEFAULT_MONEY) {
   return {
     name: slug,
@@ -165,6 +175,7 @@ function pendingRow(slug, entry, lifetimeTurnover = null, money = DEFAULT_MONEY)
     profit: null,
     unique: null,
     expectedProfit: null,
+    rate: null,
     online: Number.isFinite(Number(entry?.onlinePlayers)) ? Number(entry.onlinePlayers) : null,
     rtp: null,
     dCount: null,
